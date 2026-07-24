@@ -136,7 +136,7 @@
           <button type="submit" class="btn btn-dark w-100">Keep me posted</button>
         </div>
         <input type="hidden" name="redirect" value="https://microsre.io/thanks.html">
-        <input type="hidden" name="source" value="landing">
+        <input type="hidden" name="source" id="sourceField" value="direct">
       </form>
     </div>
   </section>
@@ -159,6 +159,16 @@
         }, 2000);
       });
     }
+    function getUrlParam(name) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(name);
+    }
+    (function() {
+      const source = getUrlParam('utm_source')
+        || getUrlParam('source')
+        || 'direct';
+      document.getElementById('sourceField').value = source;
+    })();
   </script>
 </body>
 </html>
