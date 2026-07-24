@@ -1,1 +1,164 @@
-hello
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>microSRE — Linux metrics without the baggage</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
+    .hero { background: #1a1a2e; color: #eee; padding: 4rem 0; }
+    .hero h1 { font-weight: 700; }
+    .hero .lead { color: #aaa; }
+    .coming-soon-box { background: #16213e; padding: 1.5rem; border-radius: 0.5rem; font-family: monospace; color: #4ecca3; border: 1px dashed rgba(78, 204, 163, 0.3); }
+    .coming-soon-box .badge { background: rgba(78, 204, 163, 0.15); color: #4ecca3; padding: 0.35rem 0.75rem; border-radius: 0.25rem; font-size: 0.75rem; }
+    .install-box { background: #16213e; padding: 1.5rem; border-radius: 0.5rem; font-family: monospace; color: #4ecca3; position: relative; }
+    .install-box .copy-btn {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #aaa;
+      padding: 0.25rem 0.75rem;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .install-box .copy-btn:hover {
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+    }
+    .install-box .copy-btn.copied {
+      background: #4ecca3;
+      color: #1a1a2e;
+      border-color: #4ecca3;
+    }
+    .section { padding: 3rem 0; }
+    .feature-icon { font-size: 2rem; color: #1a1a2e; }
+    footer { background: #f8f9fa; padding: 2rem 0; color: #666; }
+  </style>
+</head>
+<body>
+
+  <section class="hero text-center">
+    <div class="container">
+      <h1>microSRE</h1>
+      <p class="lead">60-second Linux health checks. One file. Zero dependencies. No parsing shell output.</p>
+      <div class="row justify-content-center mt-4">
+        <div class="col-md-8">
+          <div class="coming-soon-box text-start">
+            <span class="badge">COMING SOON</span>
+            <span class="ms-2" style="color: #fff;">First release at USENIX SREcon, October 2026</span>
+          </div>
+          </div>
+        </div>
+      </div>
+      <p class="mt-3"><a href="#how" class="text-decoration-none text-white-50">How it works ↓</a></p>
+    </div>
+  </section>
+
+  <section class="section" id="how">
+    <div class="container">
+      <h2>How it works</h2>
+      <p>microSRE reads <code>/proc</code> directly — the same kernel interface that <code>ps</code>, <code>top</code>, and <code>iostat</code> use, but without the fragile parsing and version drift. It samples CPU, memory, disk I/O, and network counters, then diffs them to produce rates.</p>
+      <p>It also watches application logs you specify, matching each line against error patterns. When error volume crosses your threshold in a time window, it alerts. No SDK to install, no code to instrument, no vendor to depend on.</p>
+      <p>Alerts go to Slack, Discord, or Telegram. No dashboard, no agent, no vendor lock-in.</p>
+      <div class="alert alert-secondary mt-3" role="alert">
+        <strong>No root required.</strong> Runs as a regular user out of the box. Root unlocks per-process network details and a few extra signals — useful, but not required.
+      </div>
+      <div class="row mt-4">
+        <div class="col-md-3 text-center">
+          <div class="feature-icon">📊</div>
+          <h5>CPU & memory</h5>
+          <p class="text-muted small">/proc/stat, /proc/meminfo, /proc/pressure</p>
+        </div>
+        <div class="col-md-3 text-center">
+          <div class="feature-icon">💾</div>
+          <h5>Disk I/O</h5>
+          <p class="text-muted small">/proc/diskstats, space via statvfs</p>
+        </div>
+        <div class="col-md-3 text-center">
+          <div class="feature-icon">🌐</div>
+          <h5>Network</h5>
+          <p class="text-muted small">/proc/net/dev, connection tracking</p>
+        </div>
+        <div class="col-md-3 text-center">
+          <div class="feature-icon">📜</div>
+          <h5>App logs</h5>
+          <p class="text-muted small">Pattern match, rate threshold, alert</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section bg-light" id="why">
+    <div class="container">
+      <h2>Why /proc directly</h2>
+      <p>Standard tools are built for human eyes, not automation. Their output formats change between distributions, container environments break their assumptions, and combining multiple tools buries signal in noise.</p>
+      <p>Reading /proc directly gives you:</p>
+      <ul>
+        <li><strong>Stability</strong> — kernel ABI, not userland format strings</li>
+        <li><strong>Speed</strong> — no fork/exec, no parsing overhead</li>
+        <li><strong>Portability</strong> — works in minimal containers, rescue shells, locked-down hosts</li>
+        <li><strong>Completeness</strong> — access fields that <code>ps</code> and <code>top</code> hide or misrepresent</li>
+        <li><strong>Early warning</strong> — stay ahead of the OOM killer by monitoring <code>/proc/pressure/mem</code>, the same kernel triggers systemd uses to decide when processes die</li>
+      </ul>
+      <p>Log scanning extends the same philosophy: observe applications from the outside, without modifying them. No SDK to break, no network dependency to fail, no vendor to disappear.</p>
+      <div class="quote-box mt-4">
+        <p class="mb-0">It's the observer that can't be blinded by the observed.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="saas">
+    <div class="container">
+      <h2>See the larger picture</h2>
+      <p>A hosted dashboard for multiple servers, longer history, and advanced alerting rules is in private beta. One alert tells you a machine is hurting. Five alerts tell you the pattern. The hosted dashboard connects your fleet so you see what a single box can not — correlation, trends, and whether the fix held. Built-in dead man's switch: if a machine stops reporting, you know about it.</p>
+      <p class="text-muted small">When one machine is not the whole story.</p>
+      <p class="text-muted small">Who watches the watchmen? We do.</p>
+      <form action="https://script.google.com/macros/s/AKfycbwAW12TAhlf9v4NeAJumHm44rgW83iO3ef9pDsecEiw46WFzB1ZijZ_Hmp1v3rCxftLHw/exec" method="POST" class="row g-3">
+        <div class="col-md-4">
+          <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
+        </div>
+        <div class="col-md-3">
+          <select name="servers" class="form-select">
+            <option value="">Servers (optional)</option>
+            <option value="1">1</option>
+            <option value="2-5">2–5</option>
+            <option value="6-20">6–20</option>
+            <option value="21-100">21–100</option>
+            <option value="100+">100+</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <button type="submit" class="btn btn-dark w-100">Keep me posted</button>
+        </div>
+        <input type="hidden" name="redirect" value="https://microsre.io/thanks.html">
+        <input type="hidden" name="source" value="landing">
+      </form>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container text-center">
+      <p>microSRE — <a href="https://github.com/aivarsk/microsre">GitHub</a> — Built for people who fix problems, not dashboards.</p>
+    </div>
+  </footer>
+
+  <script>
+    function copyInstall(btn) {
+      const cmd = btn.getAttribute("data-cmd");
+      navigator.clipboard.writeText(cmd).then(function() {
+        btn.textContent = "Copied";
+        btn.classList.add("copied");
+        setTimeout(function() {
+          btn.textContent = "Copy";
+          btn.classList.remove("copied");
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>
