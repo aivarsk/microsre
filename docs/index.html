@@ -13,6 +13,7 @@
     .coming-soon-box { background: #16213e; padding: 1.5rem; border-radius: 0.5rem; font-family: monospace; color: #4ecca3; border: 1px dashed rgba(78, 204, 163, 0.3); }
     .coming-soon-box .badge { background: rgba(78, 204, 163, 0.15); color: #4ecca3; padding: 0.35rem 0.75rem; border-radius: 0.25rem; font-size: 0.75rem; }
     .install-box { background: #16213e; padding: 1.5rem; border-radius: 0.5rem; font-family: monospace; color: #4ecca3; position: relative; }
+    .story-box { background: #f8f9fa; padding: 2rem; border-radius: 0.5rem; border-left: 4px solid #1a1a2e; }
     .install-box .copy-btn {
       position: absolute;
       top: 0.75rem;
@@ -108,6 +109,18 @@
       <p>Log scanning extends the same philosophy: observe applications from the outside, without modifying them. No SDK to break, no network dependency to fail, no vendor to disappear.</p>
       <div class="quote-box mt-4">
         <p class="mb-0">It's the observer that can't be blinded by the observed.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="story">
+    <div class="container">
+      <h2>The dashboard problem</h2>
+      <div class="story-box">
+        <p class="lead">"We asked our team: when was the last time a dashboard helped you fix an incident?"</p>
+        <p>The answer was silence. Everyone looked at logs.</p>
+        <p>We had built dashboards for every new service — Prometheus, Grafana, the whole stack. Years later, not a single engineer on the team used them during an outage. They grepped logs, checked process state, traced what happened around the error. The dashboards were there because "that is what monitoring looks like," not because they solved problems.</p>
+        <p>microSRE is built for people who already know this. Alerts when something is wrong. The tools you already use to investigate. No graphs to scroll, no panels to configure, no compliance theater.</p>
       </div>
     </div>
   </section>
