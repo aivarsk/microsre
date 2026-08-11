@@ -104,7 +104,7 @@
         <li><strong>Speed</strong> — no fork/exec, no parsing overhead</li>
         <li><strong>Portability</strong> — works in minimal containers, rescue shells, locked-down hosts</li>
         <li><strong>Completeness</strong> — access fields that <code>ps</code> and <code>top</code> hide or misrepresent</li>
-        <li><strong>Early warning</strong> — stay ahead of the OOM killer by monitoring <code>/proc/pressure/mem</code>, the same kernel triggers systemd uses to decide when processes die</li>
+        <li><strong>Early warning</strong> - stay ahead of the OOM killer by monitoring <code>/proc/pressure/mem</code>, the same kernel triggers systemd uses to decide when processes die</li>
       </ul>
       <p>Log scanning extends the same philosophy: observe applications from the outside, without modifying them. No SDK to break, no network dependency to fail, no vendor to disappear.</p>
       <div class="quote-box mt-4">
@@ -129,7 +129,19 @@
     <div class="container">
       <h2>Across your fleet</h2>
       <p>When you have more than one machine, you need to know if the problem is local or widespread. The hosted view shows the same 60-second health check — CPU, memory, disk, network, pressure — for every server in one place. Like <code>top</code> for your whole infrastructure, not another dashboard builder. With a longer history and advanced alerting rules.</p>
-      <p class="text-muted small">In private beta. Built-in dead man's switch: if a machine stops checking in, you know.</p>
+
+      <p><strong>Private beta includes:</strong></p>
+
+      <ul>
+        <li><strong>Dead man's switch</strong> - If a machine stops checking in, you know. No heartbeat means an alert, not a missing data point.</li>
+        <li><strong>Only wake up for fires</strong> - Critical alerts page you immediately. Everything else batches into a digest or waits for business hours. Your on-call rotation will thank you.</li>
+        <li><strong>One digest, not ten pings</strong> - Medium alerts collect into a single timed summary with full context. You scan the pattern in 3 seconds instead of muting the channel.</li>
+        <li><strong>Alerts that tell you what to check</strong> - Every medium alert includes a one-line suggested command — <code>iotop -o</code>, <code>tail -n 50</code>. You fix problems, not dashboards.</li>
+        <li><strong>Right noise, right room</strong> - Route critical alerts to <code>#incidents</code> with a ping. Send digests to <code>#alerts</code> silently. Your team stops training itself to ignore notifications.</li>
+        <li><strong>Escalation without babysitting</strong> - If a medium alert persists, it automatically upgrades to critical after a timer you set. You don't need to watch the watcher.</li>
+        <li><strong>Thresholds grounded in reality</strong> - Historic metrics show your actual baselines — CPU spikes during deploys, memory patterns overnight. Suggest better thresholds instead of guessing.</li>
+      </ul>
+
       <form action="https://script.google.com/macros/s/AKfycbwAW12TAhlf9v4NeAJumHm44rgW83iO3ef9pDsecEiw46WFzB1ZijZ_Hmp1v3rCxftLHw/exec" method="POST" class="row g-3">
         <div class="col-md-4">
           <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
