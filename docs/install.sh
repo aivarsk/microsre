@@ -4,7 +4,7 @@ VERSION=$(curl -s "https://api.github.com/repos/aivarsk/microsre/releases/latest
 
 if [ "$EUID" -eq 0 ]; then
   echo "WARNING: Installing as root. For user-level install, run without sudo."
-  read -p "Continue with system-wide install? [y/N] " confirm
+  read -p "Continue with system-wide install? [y/N] " confirm </dev/tty
   [[ "$confirm" == [yY]* ]] || exit 1
 
   LIB_DIR="/usr/local/lib/microsre"
