@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-VERSION="2026.9.3"
+VERSION=$(curl -s "https://api.github.com/repos/aivarsk/microsre/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
 if [ "$EUID" -eq 0 ]; then
   echo "WARNING: Installing as root. For user-level install, run without sudo."
