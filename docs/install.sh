@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-VERSION="2026.9.2"
+VERSION="2026.9.3"
 
 if [ "$EUID" -eq 0 ]; then
   echo "WARNING: Installing as root. For user-level install, run without sudo."
