@@ -3,7 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>microSRE — Linux metrics without the baggage</title>
+  <title>microSRE - Linux metrics without the baggage</title>
+  <meta name="description" content="microSRE runs 60-second Linux health checks from /proc and logs, then alerts in Slack, Discord, or Telegram. One file. No dashboards.">
+  <meta property="og:title" content="microSRE - Linux metrics without the baggage">
+  <meta property="og:description" content="Know when your Linux server needs you - without Prometheus, Grafana, or a metrics agent.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://microsre.io/">
+  <meta property="og:site_name" content="microSRE">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="microSRE - Linux metrics without the baggage">
+  <meta name="twitter:description" content="Know when your Linux server needs you - without Prometheus, Grafana, or a metrics agent.">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
@@ -17,6 +26,8 @@
       .install-box { font-size: 0.65rem; padding: 1rem; }
     }
     .story-box { background: #f8f9fa; padding: 2rem; border-radius: 0.5rem; border-left: 4px solid #1a1a2e; }
+    .quote-box { background: #fff; padding: 1.5rem; border-radius: 0.5rem; border-left: 4px solid #4ecca3; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06); }
+    .quote-box p { color: #1a1a2e; font-size: 1.1rem; font-style: italic; }
     .install-box .copy-btn {
       position: absolute;
       top: 0.75rem;
@@ -70,13 +81,13 @@
     <a href="index.html" class="brand">microSRE</a>
     <a href="index.html">Home</a>
     <a href="readme.html">Documentation</a>
-    <span class="text-muted">SaaS &#8599;</span>
+    <a href="#saas">SaaS &#8599;</a>
   </nav>
 
   <section class="hero text-center" id="install">
     <div class="container">
       <h1>microSRE</h1>
-      <p class="lead">60-second Linux health checks. One file. Zero dependencies. No parsing shell output.</p>
+      <p class="lead">60-second Linux health checks. Know when your server needs you - without Prometheus, Grafana, or a metrics agent.</p>
       <div class="mt-4">
         <div class="install-box">
           <button class="copy-btn" onclick="copyInstall(this)" data-cmd="curl -fsSL https://microsre.io/install.sh | bash">Copy</button>
@@ -88,14 +99,26 @@
     </div>
   </section>
 
+  <section class="section bg-light" id="story">
+    <div class="container">
+      <h2>The dashboard problem</h2>
+      <div class="story-box">
+        <p class="lead">"We asked our team: when was the last time a dashboard helped you fix an incident?"</p>
+        <p>The answer was silence. Everyone looked at logs.</p>
+        <p>We had built dashboards for every new service - Prometheus, Grafana, the whole stack. Years later, not a single engineer on the team used them during an outage. They grepped logs, checked process state, traced what happened around the error. The dashboards were there because "that is what monitoring looks like," not because they solved problems.</p>
+        <p>microSRE is built for people who already know this. Alerts when something is wrong. The tools you already use to investigate. No graphs to scroll, no panels to configure, no compliance theater.</p>
+      </div>
+    </div>
+  </section>
+
   <section class="section" id="how">
     <div class="container">
       <h2>How it works</h2>
-      <p>microSRE reads <code>/proc</code> directly — the same kernel interface that <code>ps</code>, <code>top</code>, and <code>iostat</code> use, but without the fragile parsing and version drift. It samples CPU, memory, disk I/O, and network counters, then diffs them to produce rates.</p>
+      <p>microSRE reads <code>/proc</code> directly - the same kernel interface that <code>ps</code>, <code>top</code>, and <code>iostat</code> use, but without the fragile parsing and version drift. It samples CPU, memory, disk I/O, and network counters, then diffs them to produce rates.</p>
       <p>It also watches application logs you specify, matching each line against error patterns. When error volume crosses your threshold in a time window, it alerts. No SDK to install, no code to instrument, no vendor to depend on.</p>
       <p>Alerts go to Slack, Discord, or Telegram. No dashboards. No data-source sprawl. No lock-in. Your metrics, your logs, your machine.</p>
       <div class="alert alert-secondary mt-3" role="alert">
-        <strong>No root required.</strong> Runs as a regular user out of the box. Root unlocks per-process network details and a few extra signals — useful, but not required.
+        <strong>No root required.</strong> Runs as a regular user out of the box. Root unlocks per-process network details and a few extra signals - useful, but not required.
       </div>
       <div class="row mt-4">
         <div class="col-md-3 text-center">
@@ -128,27 +151,16 @@
       <p>Standard tools are built for human eyes, not automation. Their output formats change between distributions, container environments break their assumptions, and combining multiple tools buries signal in noise.</p>
       <p>Reading /proc directly gives you:</p>
       <ul>
-        <li><strong>Stability</strong> — kernel ABI, not userland format strings</li>
-        <li><strong>Speed</strong> — no fork/exec, no parsing overhead</li>
-        <li><strong>Portability</strong> — works in minimal containers, rescue shells, locked-down hosts</li>
-        <li><strong>Completeness</strong> — access fields that <code>ps</code> and <code>top</code> hide or misrepresent</li>
+        <li><strong>Stability</strong> - kernel ABI, not userland format strings</li>
+        <li><strong>Speed</strong> - no fork/exec, no parsing overhead</li>
+        <li><strong>Portability</strong> - works in minimal containers, rescue shells, locked-down hosts</li>
+        <li><strong>Completeness</strong> - access fields that <code>ps</code> and <code>top</code> hide or misrepresent</li>
         <li><strong>Early warning</strong> - stay ahead of the OOM killer by monitoring <code>/proc/pressure/mem</code>, the same kernel triggers systemd uses to decide when processes die</li>
       </ul>
-      <p>Log scanning extends the same philosophy: observe applications from the outside, without modifying them. No SDK to break, no network dependency to fail, no vendor to disappear.</p>
+      <h2>Why logs directly</h2>
+      <p>Log scanning extends the same philosophy: observe applications from the outside, without modifying them. Your logs already contain the errors; you just have to alert on them. No code changes - just patterns and thresholds. Your logs, your choice: keep them local, archive them, or ship them to centralized storage. microSRE alerts you when bad things happen; the rest is up to you. No SDK to break, no network dependency to fail, no vendor to disappear.</p>
       <div class="quote-box mt-4">
         <p class="mb-0">It's the observer that can't be blinded by the observed.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="section" id="story">
-    <div class="container">
-      <h2>The dashboard problem</h2>
-      <div class="story-box">
-        <p class="lead">"We asked our team: when was the last time a dashboard helped you fix an incident?"</p>
-        <p>The answer was silence. Everyone looked at logs.</p>
-        <p>We had built dashboards for every new service — Prometheus, Grafana, the whole stack. Years later, not a single engineer on the team used them during an outage. They grepped logs, checked process state, traced what happened around the error. The dashboards were there because "that is what monitoring looks like," not because they solved problems.</p>
-        <p>microSRE is built for people who already know this. Alerts when something is wrong. The tools you already use to investigate. No graphs to scroll, no panels to configure, no compliance theater.</p>
       </div>
     </div>
   </section>
@@ -156,18 +168,15 @@
   <section class="section" id="saas">
     <div class="container">
       <h2>Across your fleet</h2>
-      <p>Running a fleet means deciding across machines, not staring at one. The hosted view is your command and control center: the same 60-second health check for every server, every signal in one place — alerts and next actions based on the whole picture, not a single metric in isolation. Like <code>top</code> for your whole infrastructure, not another dashboard builder. With a longer history and advanced alerting rules. Your data doesn't move — metrics and logs stay on your machines, in whatever form you like.</p>
+      <p>Running a fleet means deciding across machines, not staring at one. The hosted view is your command and control center: the same 60-second health check for every server, every signal in one place - alerts and next actions based on the whole picture, not a single metric in isolation. Like <code>top</code> for your whole infrastructure, not another dashboard builder. With a longer history and advanced alerting rules. Raw metrics and logs stay on your machines; the hosted view receives only 60-second health summaries and alert state.</p>
 
       <p><strong>Private beta includes:</strong></p>
 
       <ul>
         <li><strong>Dead man's switch</strong> - If a machine stops checking in, you know. No heartbeat means an alert, not a missing data point.</li>
-        <li><strong>Only wake up for fires</strong> - Critical alerts page you immediately. Everything else batches into a digest or waits for business hours. Your on-call rotation will thank you.</li>
-        <li><strong>One digest, not ten pings</strong> - Medium alerts collect into a single timed summary with full context. You scan the pattern in 3 seconds instead of muting the channel.</li>
-        <li><strong>Alerts that tell you what to check</strong> - Every medium alert includes a one-line suggested command — <code>iotop -o</code>, <code>tail -n 50</code>. You fix problems, not dashboards.</li>
-        <li><strong>Right noise, right room</strong> - Route critical alerts to <code>#incidents</code> with a ping. Send digests to <code>#alerts</code> silently. Your team stops training itself to ignore notifications.</li>
-        <li><strong>Escalation without babysitting</strong> - If a medium alert persists, it automatically upgrades to critical after a timer you set. You don't need to watch the watcher.</li>
-        <li><strong>Thresholds grounded in reality</strong> - Historic metrics show your actual baselines — CPU spikes during deploys, memory patterns overnight. Suggest better thresholds instead of guessing.</li>
+        <li><strong>Only wake up for fires</strong> - Critical alerts page you immediately. Everything else batches into a digest or waits for business hours.</li>
+        <li><strong>One digest, not ten pings</strong> - Medium alerts collect into a single timed summary with context and a suggested command. Route critical alerts to <code>#incidents</code>, digests to <code>#alerts</code> silently.</li>
+        <li><strong>Escalation without babysitting</strong> - If a medium alert persists, it automatically upgrades to critical after a timer you set. Historic baselines help tune thresholds.</li>
       </ul>
 
       <form action="https://script.google.com/macros/s/AKfycbwAW12TAhlf9v4NeAJumHm44rgW83iO3ef9pDsecEiw46WFzB1ZijZ_Hmp1v3rCxftLHw/exec" method="POST" class="row g-3">
@@ -195,7 +204,7 @@
 
   <footer>
     <div class="container text-center">
-      <p>microSRE — <a href="https://github.com/aivarsk/microsre">GitHub</a> — Built for people who fix problems, not dashboards.</p>
+      <p>microSRE - <a href="https://github.com/aivarsk/microsre">GitHub</a> - Built for people who fix problems, not dashboards.</p>
     </div>
   </footer>
 

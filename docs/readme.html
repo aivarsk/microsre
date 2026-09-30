@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Documentation - microSRE</title>
+<style>
+  :root {
+    --ink: #1a1a2e;
+    --panel: #16213e;
+    --accent: #4ecca3;
+    --line: #e5e5e5;
+  }
+  body {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+  a {
+    color: var(--ink);
+    text-decoration-color: var(--accent);
+    text-underline-offset: 2px;
+  }
+  a:hover { color: #0b7a5c; }
+  code {
+    background: #eef7f4;
+    color: var(--ink);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--panel);
+    color: var(--accent);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    line-height: 1.4;
+    border: 1px solid rgba(78, 204, 163, 0.2);
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  hr { border: none; border-top: 1px solid var(--line); margin: 2rem 0; }
+  nav {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    border-bottom: 1px solid var(--line);
+    padding: 0.25rem 0 1rem;
+    margin-bottom: 2rem;
+  }
+  nav a {
+    color: var(--ink);
+    text-decoration: none;
+    font-weight: 700;
+  }
+  nav a:hover {
+    color: #0b7a5c;
+    text-decoration: underline;
+    text-decoration-color: var(--accent);
+  }
+  .toc {
+    margin: 1.5rem 0;
+    padding: 1rem 1.25rem;
+    background: #f8f9fa;
+    border-left: 4px solid var(--accent);
+    border-radius: 0.5rem;
+  }
+  .toc ul { list-style: none; padding-left: 0; margin-bottom: 0; }
+  .toc li { margin: 0.3rem 0; }
+  .toc a { text-decoration: underline; }
+  h1 { color: var(--ink); }
+  h2 {
+    margin-top: 3rem;
+    border-left: 4px solid var(--accent);
+    padding-left: 0.75rem;
+  }
+  h3 { margin-top: 2rem; }
+  h4 { margin-top: 1.5rem; }
+</style>
+<base target="_blank">
+</head>
+<body>
+
+<nav>
+  <a href="/">← microSRE</a>
+</nav>
+
+<h1>Documentation</h1>
+
+<p>Everything you need to run microSRE on a single machine or across your fleet.</p>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ul>
+    <li><a href="#install">Installation</a></li>
+    <li><a href="#quickstart">Quickstart</a></li>
+    <li><a href="#cli">Command line</a></li>
+    <li><a href="#configuration">Configuration</a></li>
+    <li><a href="#metrics">System Metrics</a></li>
+    <li><a href="#logs">Log Monitoring</a></li>
+    <li><a href="#alerting">Alerting</a></li>
+    <li><a href="#fleet">Fleet / SaaS</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+  </ul>
+</div>
+
+<hr>
+
+<h2 id="install">Installation</h2>
+
+<p>microSRE is a single static binary. No dependencies. No package manager required.</p>
+
+<p>Root or a regular user? While a regular user is enough, running under root may be a better choice when:
+<ul>
+  <li>You want to monitor logs of applications running in Docker containers. Under a regular user microSRE will have to call <code> docker logs --since</code> that becomes slow and IO-intensive for larger logfiles unless log rotation has been set up. When running under root, microSRE can access files directly and keep track of file offsets.</li>
+  <li>You want to gain insight into network connections and files open by processes</li>
+</ul>
+</p>
+
+<pre><code>curl -fsSL https://microsre.io/install.sh | bash</code></pre>
+
+<p>The installer downloads the latest release, creates a systemd service if systemd is present and starts it up.</p>
+
+<p>To install manually, grab the binary from the <a href="https://github.com/microsre/microsre/releases">releases page</a> and place it anywhere in your <code>$PATH</code>.</p>
+
+<h3>Verify</h3>
+
+<pre><code>microsre --version</code></pre>
+
+<p>It will display locations of configuration file, logfile and unique machine identifier</p>
+
+<h3>Start, stop, restart</h3>
+
+<p>Root install - a system-wide service:</p>
+
+<pre><code>sudo systemctl restart microsre
+sudo systemctl stop microsre
+sudo systemctl start microsre</code></pre>
+
+<p>User install - a user-level service, no sudo:</p>
+
+<pre><code>systemctl --user restart microsre
+systemctl --user stop microsre
+systemctl --user start microsre</code></pre>
+
+<p>The service is enabled on install and starts automatically - at boot for a root install, at login for a user install. Check status with <code>systemctl status microsre</code> (add <code>--user</code> for a user install).</p>
+
+<hr>
+
+<h2 id="quickstart">Quickstart</h2>
+
+<p>1. Run microSRE once to create the default configuration file:</p>
+
+<pre><code>microsre --version</code></pre>
+
+<p>As root the config is written to <code>/etc/microsre/config.toml</code>; as a regular user to <code>~/.config/microsre/config.toml</code>. <code>--version</code> also prints the log file and machine ID locations.</p>
+
+<p>2. Add a webhook to the config to enable alerts:</p>
+
+<pre><code>webhook_url = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"</code></pre>
+
+<p>3. Verify the configuration:</p>
+
+<pre><code>microsre --verify
+# Configuration file valid</code></pre>
+
+<p>4. Watch metrics in the foreground:</p>
+
+<pre><code>microsre --snapshot</code></pre>
+
+<p>The dashboard prints every 60 seconds and shows which alerts <em>would</em> fire. Snapshot mode is a dry run - nothing is sent.</p>
+
+<p>5. Start the daemon:</p>
+
+<pre><code>microsre --daemon</code></pre>
+
+<p>The daemon checks every 60 seconds and sends an alert the moment a threshold is crossed.</p>
+
+<hr>
+
+<h2 id="cli">Command line</h2>
+
+<pre><code>microsre [--snapshot [SECONDS]] [--daemon] [--verify] [--version]</code></pre>
+
+<ul>
+  <li><code>--snapshot [SECONDS]</code> - run in the foreground, print the metrics dashboard every N seconds (default 60). Alerts are evaluated and displayed, but nothing is sent.</li>
+  <li><code>--daemon</code> - run the monitoring loop: check every 60 seconds, send alerts, and report to the hosted view when <code>ingest_url</code> is set.</li>
+  <li><code>--verify</code> - validate the configuration file: TOML syntax, webhook URL, alert rules, log sources, and template placeholders.</li>
+  <li><code>--version</code> - show the version and the locations of the config file, log file, and machine ID file.</li>
+</ul>
+
+<p>Run without arguments, <code>microsre</code> creates the default config file if it is missing and exits.</p>
+
+<hr>
+
+<h2 id="configuration">Configuration</h2>
+
+<p>microSRE reads a single TOML file. The location depends on the user:</p>
+
+<ul>
+  <li>root: <code>/etc/microsre/config.toml</code></li>
+  <li>regular user: <code>~/.config/microsre/config.toml</code> (or <code>$XDG_CONFIG_HOME/microsre/config.toml</code>)</li>
+</ul>
+
+<p>If the file does not exist, the built-in default is written there on first run with permissions <code>0600</code>. There is no <code>--config</code> flag - edit the file in place.</p>
+
+<p>Other files microSRE manages:</p>
+
+<ul>
+  <li>Log file: <code>/var/log/microsre/microsre.log</code> as root, <code>~/.local/state/microsre/microsre.log</code> as a regular user. Rotated at 10 MB, two backups kept.</li>
+  <li>Machine ID: <code>/var/lib/microsre/machine-id</code> or <code>~/.local/state/microsre/machine-id</code>. A random UUID that identifies this machine to the hosted view.</li>
+</ul>
+
+<h3>Full example</h3>
+
+<pre><code># Report to the microsre.io hosted view (optional)
+# ingest_url = "https://eu.microsre.io/ingest?token=&lt;your token&gt;"
+
+# Where alerts go (optional). Slack, Discord and Telegram webhook URLs are
+# auto-detected from the URL. No webhook_url - no alerts.
+# webhook_url = "https://hooks.slack.com/services/..."
+# or: webhook_url = "https://discord.com/api/webhooks/..."
+# or: webhook_url = "https://api.telegram.org/bot&lt;token&gt;/sendMessage"
+# username = "microsrebot"       # optional display name, Slack and Discord
+# chat_id = "-1001234567890"     # Telegram only
+
+[alerts]
+# metric name                fire when value &gt;= max for `consecutive` checks
+"mem.utilization_pct"    = { max = 90, consecutive = 1, recovery_margin = 0.95, template = "metric" }
+"cpu.utilization_pct"    = { max = 80, consecutive = 1, recovery_margin = 0.95, template = "metric" }
+"disk.space_usage_pct"   = { max = 90, consecutive = 1, recovery_margin = 0.95, template = "metric" }
+"oom.count"              = { max = 1,  consecutive = 1, template = "oom" }
+"logs.nginx.error_count" = { max = 10, consecutive = 2, recovery_margin = 0.95, template = "logs" }
+
+[[logs]]
+name = "nginx"
+path = "/var/log/nginx/error.log"
+error_pattern = "\\[error\\]|\\[crit\\]|\\[alert\\]|\\[emerg\\]"
+
+[[docker-logs]]
+# containers = ["django-app", "celery-worker"]   # default: all containers
+error_pattern = ".(ERROR|CRITICAL|FATAL)."
+
+[[templates]]
+name = "metric"
+title = "📊 {metric.name} alert on {hostname}"
+body = """**{metric.name}**: {metric.value}
+**Threshold**: {metric.min} {metric.max}
+**Duration**: {metric.consecutive} consecutive checks"""</code></pre>
+
+<h3>Top-level keys</h3>
+
+<ul>
+  <li><code>webhook_url</code> - single destination for alerts. Slack (<code>hooks.slack.com</code>), Discord (<code>discord.com/api/webhooks</code>), and Telegram (<code>api.telegram.org</code>) are auto-detected; any other URL is rejected by <code>--verify</code>. Omit to run without alerts.</li>
+  <li><code>username</code> - bot display name for Slack and Discord. Defaults to <code>microsre</code>.</li>
+  <li><code>chat_id</code> - Telegram only, required for Telegram webhooks.</li>
+  <li><code>ingest_url</code> - report metrics and alerts to the microsre.io hosted view. See <a href="#fleet">Fleet / SaaS</a>.</li>
+</ul>
+
+<h3>Alert rules - <code>[alerts]</code></h3>
+
+<p>Each key is a metric name, each value is a rule:</p>
+
+<ul>
+  <li><code>max</code> - fire when the value is greater than or equal to this.</li>
+  <li><code>min</code> - fire when the value is less than or equal to this. Use <code>max</code>, <code>min</code>, or both.</li>
+  <li><code>consecutive</code> - how many checks in a row the threshold must hold before the alert fires. Default 1. Higher values filter out spikes.</li>
+  <li><code>recovery_margin</code> - fraction of the threshold the value must return inside before a "Recovered" message is sent. E.g. 0.95 sends recovery once the value drops below 95% of <code>max</code>. Default 0 - the alert state resets silently, with no recovery message.</li>
+  <li><code>template</code> - name of a <code>[[templates]]</code> entry used to render the message. Required.</li>
+</ul>
+
+<h3>Alertable metrics</h3>
+
+<pre><code># memory
+mem.utilization_pct  mem.swap_utilization_pct
+mem.pressure.{some,full}.avg{10,60}  (+ .previous variants)
+
+# cpu
+cpu.utilization_pct  cpu.iowait_pct  cpu.steal_pct
+cpu.max_utilization_pct  cpu.max_utilization_core  cpu.utilization_per_core
+cpu.loadavg.1min  (+ .previous)
+cpu.pressure.{some,full}.avg{10,60}  (+ .previous)
+
+# disk
+disk.space_usage_pct
+disk.max.utilization_pct  disk.max.await_ms  disk.max.device
+disk.total.{read,write}_bytes_per_sec  disk.total.{read,write}_iops
+disk.pressure.{some,full}.avg{10,60}  (+ .previous)
+
+# network
+net.total.{rx,tx}_bytes_per_sec  net.total.errs_per_sec  net.total.drop_per_sec
+net.max.utilization_pct  net.max.utilization_iface
+net.max.{rx,tx}_bytes_per_sec  net.max.{rx,tx}_iface
+
+# oom kills - detected automatically from kernel logs, no config needed
+oom.count  oom.victims
+
+# per configured log source (logs.NAME / docker-logs.NAME)
+&lt;source&gt;.line_count  &lt;source&gt;.error_count  &lt;source&gt;.error_pct</code></pre>
+
+<p><code>hostname</code>, <code>timestamp</code>, and <code>uptime</code> are also available - mostly useful in templates.</p>
+
+<h3>Templates - <code>[[templates]]</code></h3>
+
+<p>Alert messages are rendered with Python format-string placeholders:</p>
+
+<ul>
+  <li>Any metric name above, e.g. <code>{mem.utilization_pct}</code>. Pressure and load average metrics also have <code>.previous</code> variants with the previous check's value.</li>
+  <li><code>{metric.name}</code>, <code>{metric.value}</code>, <code>{metric.min}</code>, <code>{metric.max}</code>, <code>{metric.consecutive}</code> - the rule that fired.</li>
+  <li><code>{scope.*}</code> - fields of the metric family the alert belongs to. For an alert on <code>logs.nginx.error_count</code>: <code>{scope.name}</code>, <code>{scope.error_count}</code>, <code>{scope.error_pct}</code>, <code>{scope.errors}</code> (recent matching lines).</li>
+  <li><code>{hostname}</code>, <code>{timestamp}</code>, <code>{uptime}</code>.</li>
+</ul>
+
+<p>Placeholders that don't match any known field are reported by <code>microsre --verify</code>.</p>
+
+<hr>
+
+<h2 id="metrics">System Metrics</h2>
+
+<p>microSRE reads <code>/proc</code> directly. No shelling out to <code>ps</code>, <code>top</code>, or <code>iostat</code>.</p>
+
+<h3>CPU</h3>
+
+<p>Source: <code>/proc/stat</code></p>
+
+<p>CPU usage is calculated by diffing user, system, and idle ticks between intervals. The result is a percentage of total capacity.</p>
+
+<h3>Memory</h3>
+
+<p>Source: <code>/proc/meminfo</code></p>
+
+<p>Used memory is <code>MemTotal - MemAvailable</code>. This matches what the OOM killer sees, not what <code>free</code> reports.</p>
+
+<h3>Disk I/O</h3>
+
+<p>Source: <code>/proc/diskstats</code></p>
+
+<p>Reads and writes are counted per block device. Space usage comes from <code>statvfs</code> on the root mount.</p>
+
+<h3>Network</h3>
+
+<p>Source: <code>/proc/net/dev</code></p>
+
+<p>Bytes and packets in/out are tracked per interface. Dropped and error counters are included in alerts.</p>
+
+<h3>Pressure</h3>
+
+<p>Source: <code>/proc/pressure/cpu</code>, <code>/proc/pressure/memory</code>, <code>/proc/pressure/io</code></p>
+
+<p>Pressure stall information (PSI) is available on kernels 4.20+. It measures how much time tasks spend waiting for resources. This is the same signal systemd uses for OOM avoidance.</p>
+
+<hr>
+
+<h2 id="logs">Log Monitoring</h2>
+
+<p>microSRE tails log files and counts lines. Each <code>[[logs]]</code> entry takes a <code>name</code> and an absolute <code>path</code>:</p>
+
+<pre><code>[[logs]]
+name = "nginx"
+path = "/var/log/nginx/error.log"
+line_pattern = ".*"                       # default: every line counts
+error_pattern = ".*"                      # default: every line is an error</code></pre>
+
+<p>On every check, each source reports <code>logs.&lt;name&gt;.line_count</code>, <code>.error_count</code>, <code>.error_pct</code>, and <code>.errors</code> (the recent matching lines). Alert on any of them - e.g. <code>max = 10</code> on <code>logs.nginx.error_count</code> fires when more than 10 error lines appear in a single check.</p>
+
+<ul>
+  <li>Files are opened and seeked to the end. Existing content is not re-scanned.</li>
+  <li>Log rotation is handled: a new inode or a truncated file resumes from the start of the new file.</li>
+  <li>Patterns are Python regular expressions, matched with <code>re.search</code> - no full-match anchoring unless you add <code>^</code> and <code>$</code>.</li>
+</ul>
+
+<h3>Example: Nginx errors</h3>
+
+<pre><code>[[logs]]
+name = "nginx"
+path = "/var/log/nginx/error.log"
+error_pattern = "\\[error\\]|\\[crit\\]|\\[alert\\]|\\[emerg\\]"</code></pre>
+
+<pre><code>"logs.nginx.error_count" = { max = 10, consecutive = 2, template = "logs" }</code></pre>
+
+<p>This fires when at least 10 error-level lines appear in each of two consecutive checks, and uses the <code>logs</code> template which includes the recent error lines.</p>
+
+<h3>Docker logs</h3>
+
+<pre><code>[[docker-logs]]
+# containers = ["django-app", "celery-worker"]   # default: all containers
+line_pattern = "^\\d{4}-\\d{2}-\\d{2}"   # e.g. lines starting with a timestamp
+error_pattern = ".(ERROR|CRITICAL|FATAL)."</code></pre>
+
+<p>As root, microSRE reads the container JSON logs under <code>/var/lib/docker/containers</code> directly and keeps file offsets - cheap. As a regular user it falls back to <code>docker logs --since</code> on every check, which becomes slow and IO-intensive unless log rotation is set up. Docker Compose replica suffixes (<code>-1</code>, <code>_1</code>) are stripped, so <code>containers</code> lists service names. Metrics are reported per container as <code>docker-logs.&lt;name&gt;.*</code>.</p>
+
+<h3>Multiple log sources</h3>
+
+<p>Add as many <code>[[logs]]</code> and <code>[[docker-logs]]</code> sections as you need. Each is independent.</p>
+
+<h3>Permissions</h3>
+
+<p>microSRE must have read access to the log files. If running as a non-root user, add that user to the <code>adm</code> or <code>systemd-journal</code> group, or adjust file ACLs.</p>
+
+<hr>
+
+<h2 id="alerting">Alerting</h2>
+
+<p>Alerts go to a single <code>webhook_url</code>; the chat service is detected from the URL. Omit the key to run without alerts.</p>
+
+<pre><code># Slack
+webhook_url = "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXX"
+username = "microsrebot"      # optional
+
+# Discord
+webhook_url = "https://discord.com/api/webhooks/..."
+
+# Telegram - chat_id required
+webhook_url = "https://api.telegram.org/bot123456:ABC-DEF.../sendMessage"
+chat_id = "-1001234567890"</code></pre>
+
+<p>For Telegram private chats, the chat ID is your user ID. For groups, add the bot to the group and use the group ID (usually a negative number). If Telegram returns HTTP 400, the bot is usually missing channel admin rights.</p>
+
+<h3>How alerts fire</h3>
+
+<ul>
+  <li>An alert fires when a value crosses <code>max</code> (or <code>min</code>) and stays crossed for <code>consecutive</code> checks.</li>
+  <li>While an alert is active it is not re-sent. With <code>recovery_margin</code> set, one "Recovered" message goes out when the value returns within the margin.</li>
+  <li>Every alert and recovery is also written to syslog.</li>
+  <li>Message text comes from <code>[[templates]]</code> - see <a href="#configuration">Configuration</a> for the placeholder reference. Telegram messages get MarkdownV2 escaping automatically.</li>
+</ul>
+
+<hr>
+
+<h2 id="fleet">Fleet / SaaS</h2>
+
+<p>This is your command and control center with health checks from all your machines in one place</p>
+
+<h3>Connecting a machine</h3>
+
+<p>1. Sign up at <a href="/#saas">microsre.io</a> to get an ingest URL with a token.</p>
+
+<p>2. Add one line to the top of your config:</p>
+
+<pre><code>ingest_url = "https://eu.microsre.io/ingest?token=&lt;your token&gt;"</code></pre>
+
+<p>3. Restart the daemon. The machine appears in your fleet view within one check, reports a heartbeat every 60 seconds, and sends "up" / "down" events on start and shutdown. If a machine stops checking in, the hosted view alerts - a dead man's switch, not a missing data point.</p>
+
+<hr>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3>No alerts received</h3>
+
+<ul>
+  <li>Check that the webhook URL is correct and the channel exists.</li>
+  <li>Run <code>microsre --verify</code> to validate the config, and <code>microsre --snapshot</code> to watch which alerts fire in the foreground (snapshot is a dry run - nothing is sent).</li>
+  <li>Verify the machine can reach Slack/Discord/Telegram endpoints: <code>curl -I https://hooks.slack.com</code></li>
+</ul>
+
+<h3>High CPU from microSRE itself</h3>
+
+<ul>
+  <li>The daemon checks every 60 seconds; if it is too heavy, run in the foreground with a slower loop: <code>microsre --snapshot 120</code> or <code>--snapshot 300</code>.</li>
+  <li>Reduce the number of log files being tailed.</li>
+  <li>Check if a log file is being written to at an extreme rate; microSRE reads every line.</li>
+</ul>
+
+<h3>Permission denied on /proc</h3>
+
+<ul>
+  <li>microSRE needs to run as root or as a user with access to <code>/proc</code>. In containers, ensure the procfs is mounted read-only, not masked.</li>
+</ul>
+
+<h3>Logs not matching</h3>
+
+<ul>
+  <li>Test your pattern with <code>grep -E 'your-pattern' /var/log/your.log</code> to confirm it matches.</li>
+  <li>Remember that microSRE starts tailing from the end of the file. It will not catch historical lines.</li>
+  <li>Ensure the file path is absolute and the file exists before microSRE starts.</li>
+</ul>
+
+<h3>Systemd service fails to start</h3>
+
+<pre><code>journalctl -u microsre -n 50 --no-pager</code></pre>
+
+<p>Common causes: invalid TOML syntax, a <code>webhook_url</code> that is not a Slack, Discord, or Telegram URL, a bad regex in a log pattern, or missing read permissions on log files. The config file itself is created automatically on first run - check the path printed by <code>microsre --version</code>.</p>
+
+<hr>
+
+<p>Still stuck? Open an issue on <a href="https://github.com/aivarsk/microsre">GitHub</a> or email <a href="mailto:hello@microsre.io">hello@microsre.io</a>.</p>
+
+</body>
+</html>
