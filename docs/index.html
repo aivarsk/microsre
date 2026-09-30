@@ -12,7 +12,10 @@
     .hero .lead { color: #aaa; }
     .coming-soon-box { background: #16213e; padding: 1.5rem; border-radius: 0.5rem; font-family: monospace; color: #4ecca3; border: 1px dashed rgba(78, 204, 163, 0.3); }
     .coming-soon-box .badge { background: rgba(78, 204, 163, 0.15); color: #4ecca3; padding: 0.35rem 0.75rem; border-radius: 0.25rem; font-size: 0.75rem; }
-    .install-box { background: #16213e; padding: 1.5rem; border-radius: 0.5rem; font-family: monospace; color: #4ecca3; position: relative; }
+    .install-box { background: #16213e; padding: 1.5rem; border-radius: 0.5rem; font-family: monospace; color: #4ecca3; position: relative; display: inline-block; white-space: nowrap; text-align: left; }
+    @media (max-width: 576px) {
+      .install-box { font-size: 0.65rem; padding: 1rem; }
+    }
     .story-box { background: #f8f9fa; padding: 2rem; border-radius: 0.5rem; border-left: 4px solid #1a1a2e; }
     .install-box .copy-btn {
       position: absolute;
@@ -39,22 +42,46 @@
     .section { padding: 3rem 0; }
     .feature-icon { font-size: 2rem; color: #1a1a2e; }
     footer { background: #f8f9fa; padding: 2rem 0; color: #666; }
+    nav {
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      gap: 1.5rem;
+      align-items: baseline;
+      flex-wrap: wrap;
+      position: sticky; top: 0; z-index: 100;
+      background: #fff; border-bottom: 1px solid #e5e5e5; padding: 0.75rem 1.5rem; 
+    }
+    nav a {
+      color: inherit;
+      text-decoration: none;
+    }
+    nav a:hover {
+      text-decoration: underline;
+    }
+    nav .brand {
+      font-weight: 700;
+      margin-right: auto;
+    }
   </style>
 </head>
 <body>
+  <nav>
+    <a href="index.html" class="brand">microSRE</a>
+    <a href="index.html">Home</a>
+    <a href="readme.html">Documentation</a>
+    <span class="text-muted">SaaS &#8599;</span>
+  </nav>
 
-  <section class="hero text-center">
+  <section class="hero text-center" id="install">
     <div class="container">
       <h1>microSRE</h1>
       <p class="lead">60-second Linux health checks. One file. Zero dependencies. No parsing shell output.</p>
-      <div class="row justify-content-center mt-4">
-        <div class="col-md-8">
-          <div class="install-box text-start">
-            <button class="copy-btn" onclick="copyInstall(this)" data-cmd="curl -fsSL https://microsre.io/install.sh | bash">Copy</button>
-            <span class="text-muted"># Install in one command</span><br>
-            curl -fsSL https://microsre.io/install.sh | bash
-          </div>
-          </div>
+      <div class="mt-4">
+        <div class="install-box">
+          <button class="copy-btn" onclick="copyInstall(this)" data-cmd="curl -fsSL https://microsre.io/install.sh | bash">Copy</button>
+          <span class="text-muted"># Install in one command</span><br>
+          curl -fsSL https://microsre.io/install.sh | bash
         </div>
       </div>
       <p class="mt-3"><a href="#how" class="text-decoration-none text-white-50">How it works ↓</a></p>
@@ -66,7 +93,7 @@
       <h2>How it works</h2>
       <p>microSRE reads <code>/proc</code> directly — the same kernel interface that <code>ps</code>, <code>top</code>, and <code>iostat</code> use, but without the fragile parsing and version drift. It samples CPU, memory, disk I/O, and network counters, then diffs them to produce rates.</p>
       <p>It also watches application logs you specify, matching each line against error patterns. When error volume crosses your threshold in a time window, it alerts. No SDK to install, no code to instrument, no vendor to depend on.</p>
-      <p>Alerts go to Slack, Discord, or Telegram. No dashboard, no agent, no vendor lock-in.</p>
+      <p>Alerts go to Slack, Discord, or Telegram. No dashboards. No data-source sprawl. No lock-in. Your metrics, your logs, your machine.</p>
       <div class="alert alert-secondary mt-3" role="alert">
         <strong>No root required.</strong> Runs as a regular user out of the box. Root unlocks per-process network details and a few extra signals — useful, but not required.
       </div>
@@ -129,7 +156,7 @@
   <section class="section" id="saas">
     <div class="container">
       <h2>Across your fleet</h2>
-      <p>When you have more than one machine, you need to know if the problem is local or widespread. The hosted view shows the same 60-second health check — CPU, memory, disk, network, pressure — for every server in one place. Like <code>top</code> for your whole infrastructure, not another dashboard builder. With a longer history and advanced alerting rules.</p>
+      <p>Running a fleet means deciding across machines, not staring at one. The hosted view is your command and control center: the same 60-second health check for every server, every signal in one place — alerts and next actions based on the whole picture, not a single metric in isolation. Like <code>top</code> for your whole infrastructure, not another dashboard builder. With a longer history and advanced alerting rules. Your data doesn't move — metrics and logs stay on your machines, in whatever form you like.</p>
 
       <p><strong>Private beta includes:</strong></p>
 
