@@ -223,6 +223,12 @@ systemctl --user start microsre</code></pre>
 <pre><code># Report to the microsre.io hosted view (optional)
 # ingest_url = "https://eu.microsre.io/ingest?token=&lt;your token&gt;"
 
+# Expose metrics for Prometheus scraping (optional)
+# prometheus_listen = "127.0.0.1:9100"
+
+# Seconds between checks in daemon mode
+interval = 60
+
 # Where alerts go (optional). Slack, Discord and Telegram webhook URLs are
 # auto-detected from the URL. No webhook_url - no alerts.
 # webhook_url = "https://hooks.slack.com/services/..."
@@ -232,12 +238,12 @@ systemctl --user start microsre</code></pre>
 # chat_id = "-1001234567890"     # Telegram only
 
 [alerts]
-# metric name                fire when value &gt;= max for `consecutive` checks
-"mem.utilization_pct"    = { max = 90, consecutive = 1, recovery_margin = 0.95, template = "metric" }
-"cpu.utilization_pct"    = { max = 80, consecutive = 1, recovery_margin = 0.95, template = "metric" }
-"disk.space_usage_pct"   = { max = 90, consecutive = 1, recovery_margin = 0.95, template = "metric" }
-"oom.count"              = { max = 1,  consecutive = 1, template = "oom" }
-"logs.nginx.error_count" = { max = 10, consecutive = 2, recovery_margin = 0.95, template = "logs" }
+# metric name                fire when value &gt;= max for `duration` seconds
+"mem.utilization_pct"    = { max = 90, duration = 0,   recovery_margin = 0.95, template = "metric" }
+"cpu.utilization_pct"    = { max = 80, duration = 0,   recovery_margin = 0.95, template = "metric" }
+"disk.space_usage_pct"   = { max = 90, duration = 0,   recovery_margin = 0.95, template = "metric" }
+"oom.count"              = { max = 1,  duration = 0,   template = "oom" }
+"logs.nginx.error_count" = { max = 10, duration = 120, recovery_margin = 0.95, template = "logs" }
 
 [[logs]]
 name = "nginx"
@@ -253,7 +259,7 @@ name = "metric"
 title = "📊 {metric.name} alert on {hostname}"
 body = """**{metric.name}**: {metric.value}
 **Threshold**: {metric.min} {metric.max}
-**Duration**: {metric.consecutive} consecutive checks"""</code></pre>
+**Duration**: {metric.duration} seconds"""</code></pre>
 
 <h3>Top-level keys</h3>
 
@@ -262,6 +268,8 @@ body = """**{metric.name}**: {metric.value}
   <li><code>username</code> - bot display name for Slack and Discord. Defaults to <code>microsre</code>.</li>
   <li><code>chat_id</code> - Telegram only, required for Telegram webhooks.</li>
   <li><code>ingest_url</code> - report metrics and alerts to the microsre.io hosted view. See <a href="#fleet">Fleet / SaaS</a>.</li>
+  <li><code>prometheus_listen</code> - optional <code>"host:port"</code> to expose all metrics in Prometheus text format at <code>/metrics</code>. Off by default; daemon mode only.</li>
+  <li><code>interval</code> - seconds between checks in daemon mode. Default 60; values below 5 are rejected. With a shorter interval, alert <code>duration</code> values stay in seconds and need no re-tuning.</li>
 </ul>
 
 <h3>Alert rules - <code>[alerts]</code></h3>
@@ -271,44 +279,48 @@ body = """**{metric.name}**: {metric.value}
 <ul>
   <li><code>max</code> - fire when the value is greater than or equal to this.</li>
   <li><code>min</code> - fire when the value is less than or equal to this. Use <code>max</code>, <code>min</code>, or both.</li>
-  <li><code>consecutive</code> - how many checks in a row the threshold must hold before the alert fires. Default 1. Higher values filter out spikes.</li>
+  <li><code>duration</code> - seconds the threshold must hold before the alert fires. Default 0 - the alert fires as soon as the threshold is crossed. Because the value is seconds rather than checks, a rule means the same thing at any <code>interval</code>: with the default 60s interval, <code>duration = 60</code> fires on the second crossed check in a row.</li>
   <li><code>recovery_margin</code> - fraction of the threshold the value must return inside before a "Recovered" message is sent. E.g. 0.95 sends recovery once the value drops below 95% of <code>max</code>. Default 0 - the alert state resets silently, with no recovery message.</li>
   <li><code>template</code> - name of a <code>[[templates]]</code> entry used to render the message. Required.</li>
 </ul>
 
 <h3>Alertable metrics</h3>
 
+<!-- metrics:table:begin -->
 <p>Every metric and exactly where it comes from:</p>
 
 <table>
 <tr><th>Metric</th><th>Source file</th><th>Field(s)</th></tr>
 <tr><td class="group" colspan="3">Memory</td></tr>
-<tr><td><code>mem.utilization_pct</code></td><td><code>/proc/meminfo</code></td><td>MemTotal, MemAvailable (used = total &minus; available)</td></tr>
+<tr><td><code>mem.utilization_pct</code></td><td><code>/proc/meminfo</code></td><td>MemTotal, MemAvailable (used = total - available)</td></tr>
 <tr><td><code>mem.swap_utilization_pct</code></td><td><code>/proc/meminfo</code></td><td>SwapTotal, SwapFree</td></tr>
-<tr><td><code>mem.pressure.{some,full}.avg{10,60}</code> (+ <code>.previous</code>)</td><td><code>/proc/pressure/memory</code></td><td><code>some</code> / <code>full</code> line, <code>avg10</code> / <code>avg60</code></td></tr>
+<tr><td><code>mem.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/memory</code></td><td>some / full line, avg10 / avg60</td></tr>
 <tr><td class="group" colspan="3">CPU</td></tr>
-<tr><td><code>cpu.utilization_pct</code>, <code>cpu.iowait_pct</code>, <code>cpu.steal_pct</code></td><td><code>/proc/stat</code></td><td><code>cpu</code> line — user, nice, system, idle, iowait, irq, softirq, steal ticks, diffed over the interval</td></tr>
-<tr><td><code>cpu.max_utilization_pct</code>, <code>cpu.max_utilization_core</code>, <code>cpu.utilization_per_core</code></td><td><code>/proc/stat</code></td><td><code>cpuN</code> per-core lines</td></tr>
-<tr><td><code>cpu.loadavg.1min</code> (+ <code>.previous</code>)</td><td><code>/proc/loadavg</code></td><td>1 min field</td></tr>
-<tr><td><code>cpu.pressure.{some,full}.avg{10,60}</code> (+ <code>.previous</code>)</td><td><code>/proc/pressure/cpu</code></td><td><code>some</code> / <code>full</code> line, <code>avg10</code> / <code>avg60</code></td></tr>
+<tr><td><code>cpu.utilization_pct, cpu.iowait_pct, cpu.steal_pct</code></td><td><code>/proc/stat</code></td><td>cpu line - user, nice, system, idle, iowait, irq, softirq, steal ticks, diffed over the interval</td></tr>
+<tr><td><code>cpu.max_utilization_pct, cpu.max_utilization_core, cpu.utilization_per_core</code></td><td><code>/proc/stat</code></td><td>cpuN per-core lines</td></tr>
+<tr><td><code>cpu.loadavg.1min (+ .previous)</code></td><td><code>/proc/loadavg</code></td><td>1 min field</td></tr>
+<tr><td><code>cpu.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/cpu</code></td><td>some / full line, avg10 / avg60</td></tr>
 <tr><td class="group" colspan="3">Disk</td></tr>
-<tr><td><code>disk.space_usage_pct</code></td><td><code>/proc/self/mountinfo</code></td><td>per-mount <code>statvfs</code> bytes used / total; each device counted once</td></tr>
-<tr><td><code>disk.max.utilization_pct</code>, <code>disk.max.await_ms</code>, <code>disk.max.queue_depth</code>, <code>disk.max.device</code></td><td><code>/proc/diskstats</code></td><td>per device: <code>time_in_progress</code> diff; await = (<code>time_reading</code> + <code>time_writing</code>) / (<code>reads</code> + <code>writes</code>); queue depth = <code>in_progress</code> gauge; stacked dm/md deduplicated to the backing disk</td></tr>
-<tr><td><code>disk.total.{read,write}_bytes_per_sec</code></td><td><code>/proc/diskstats</code></td><td><code>sectors_read</code> / <code>sectors_written</code> &times; sector size</td></tr>
-<tr><td><code>disk.total.{read,write}_iops</code></td><td><code>/proc/diskstats</code></td><td><code>reads</code> / <code>writes</code> completed</td></tr>
-<tr><td><code>disk.pressure.{some,full}.avg{10,60}</code> (+ <code>.previous</code>)</td><td><code>/proc/pressure/io</code></td><td><code>some</code> / <code>full</code> line, <code>avg10</code> / <code>avg60</code></td></tr>
+<tr><td><code>disk.space_usage_pct</code></td><td><code>/proc/self/mountinfo</code></td><td>per-mount statvfs bytes used / total; each device counted once</td></tr>
+<tr><td><code>disk.max.utilization_pct, disk.max.await_ms, disk.max.queue_depth, disk.max.device</code></td><td><code>/proc/diskstats</code></td><td>per device: time_in_progress diff; await = (time_reading + time_writing) / (reads + writes); queue depth = in_progress gauge; stacked dm/md deduplicated to the backing disk</td></tr>
+<tr><td><code>disk.total.{read,write}_bytes_per_sec</code></td><td><code>/proc/diskstats</code></td><td>sectors_read / sectors_written x sector size</td></tr>
+<tr><td><code>disk.total.{read,write}_iops</code></td><td><code>/proc/diskstats</code></td><td>reads / writes completed</td></tr>
+<tr><td><code>disk.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/io</code></td><td>some / full line, avg10 / avg60</td></tr>
+<tr><td><code>disk.&lt;device&gt;.*</code></td><td><code>/proc/diskstats</code></td><td>per-device counters, diffs over the check interval</td></tr>
 <tr><td class="group" colspan="3">Network</td></tr>
-<tr><td><code>net.total.{rx,tx}_bytes_per_sec</code></td><td><code>/proc/net/dev</code></td><td>sum of per-interface <code>rx_bytes</code> / <code>tx_bytes</code></td></tr>
-<tr><td><code>net.total.errs_per_sec</code>, <code>net.total.drop_per_sec</code></td><td><code>/proc/net/dev</code></td><td><code>rx_errs</code> + <code>tx_errs</code>, <code>rx_drop</code> + <code>tx_drop</code></td></tr>
-<tr><td><code>net.tcp.retrans_per_sec</code>, <code>net.tcp.retrans_ratio_pct</code></td><td><code>/proc/net/snmp</code></td><td><code>Tcp:</code> — <code>RetransSegs</code>, <code>OutSegs</code></td></tr>
-<tr><td><code>net.tcp.listen_drops</code>, <code>net.tcp.listen_overflows</code></td><td><code>/proc/net/netstat</code></td><td><code>TcpExt:</code> — <code>ListenDrops</code>, <code>ListenOverflows</code></td></tr>
-<tr><td><code>net.max.utilization_pct</code>, <code>net.max.utilization_iface</code></td><td><code>/proc/net/dev</code> + <code>/sys/class/net/&lt;iface&gt;/speed</code></td><td>max of rx/tx bytes &times;8 as % of link speed</td></tr>
-<tr><td><code>net.max.{rx,tx}_bytes_per_sec</code>, <code>net.max.{rx,tx}_iface</code></td><td><code>/proc/net/dev</code></td><td>busiest interface by bytes</td></tr>
+<tr><td><code>net.total.{rx,tx}_bytes_per_sec</code></td><td><code>/proc/net/dev</code></td><td>sum of per-interface rx_bytes / tx_bytes</td></tr>
+<tr><td><code>net.total.errs_per_sec, net.total.drop_per_sec</code></td><td><code>/proc/net/dev</code></td><td>rx_errs + tx_errs, rx_drop + tx_drop</td></tr>
+<tr><td><code>net.tcp.retrans_per_sec, net.tcp.retrans_ratio_pct</code></td><td><code>/proc/net/snmp</code></td><td>Tcp: - RetransSegs, OutSegs</td></tr>
+<tr><td><code>net.tcp.listen_drops, net.tcp.listen_overflows</code></td><td><code>/proc/net/netstat</code></td><td>TcpExt: - ListenDrops, ListenOverflows</td></tr>
+<tr><td><code>net.max.utilization_pct, net.max.utilization_iface</code></td><td><code>/proc/net/dev + /sys/class/net/&lt;iface&gt;/speed</code></td><td>max of rx/tx bytes x8 as % of link speed</td></tr>
+<tr><td><code>net.max.{rx,tx}_bytes_per_sec, net.max.{rx,tx}_iface</code></td><td><code>/proc/net/dev</code></td><td>busiest interface by bytes</td></tr>
+<tr><td><code>net.&lt;iface&gt;.*</code></td><td><code>/proc/net/dev</code></td><td>per-interface counters, diffs over the check interval</td></tr>
 <tr><td class="group" colspan="3">OOM kills</td></tr>
-<tr><td><code>oom.count</code>, <code>oom.victims</code></td><td>kernel log (auto-detected, no config)</td><td>OOM killer events</td></tr>
-<tr><td class="group" colspan="3">Log sources — per <code>[[logs]]</code> / <code>[[docker-logs]]</code> entry, reported as <code>&lt;source&gt;.*</code></td></tr>
-<tr><td><code>&lt;source&gt;.line_count</code>, <code>.error_count</code>, <code>.error_pct</code></td><td>the configured log file or container JSON logs</td><td>lines matching <code>line_pattern</code> / <code>error_pattern</code></td></tr>
+<tr><td><code>oom.count, oom.victims</code></td><td><code>kernel log (auto-detected, no config)</code></td><td>OOM killer events</td></tr>
+<tr><td class="group" colspan="3">Log sources</td></tr>
+<tr><td><code>logs.&lt;source&gt;.*, docker-logs.&lt;source&gt;.* (per configured log source)</code></td><td><code>the configured log file or container JSON logs</code></td><td>line_count / error_count / error_pct / errors - lines matching line_pattern / error_pattern</td></tr>
 </table>
+<!-- metrics:table:end -->
 
 <p><code>hostname</code>, <code>timestamp</code>, and <code>uptime</code> (from <code>/proc/uptime</code>) are also available - mostly useful in templates.</p>
 
@@ -318,12 +330,18 @@ body = """**{metric.name}**: {metric.value}
 
 <ul>
   <li>Any metric name above, e.g. <code>{mem.utilization_pct}</code>. Pressure and load average metrics also have <code>.previous</code> variants with the previous check's value.</li>
-  <li><code>{metric.name}</code>, <code>{metric.value}</code>, <code>{metric.min}</code>, <code>{metric.max}</code>, <code>{metric.consecutive}</code> - the rule that fired.</li>
+  <li><code>{metric.name}</code>, <code>{metric.value}</code>, <code>{metric.min}</code>, <code>{metric.max}</code>, <code>{metric.duration}</code> - the rule that fired.</li>
   <li><code>{scope.*}</code> - fields of the metric family the alert belongs to. For an alert on <code>logs.nginx.error_count</code>: <code>{scope.name}</code>, <code>{scope.error_count}</code>, <code>{scope.error_pct}</code>, <code>{scope.errors}</code> (recent matching lines).</li>
   <li><code>{hostname}</code>, <code>{timestamp}</code>, <code>{uptime}</code>.</li>
 </ul>
 
 <p>Placeholders that don't match any known field are reported by <code>microsre --verify</code>.</p>
+
+<h3>Prometheus</h3>
+
+<p>Optional. Set <code>prometheus_listen</code> and the daemon serves the metrics listed above in Prometheus text format at <code>/metrics</code> - point a scrape target at it. Without this setting nothing listens. The endpoint has no authentication: localhost is the safe default, and exposing it to a network should be a deliberate choice (firewall or reverse proxy).</p>
+
+<p>Exposed names carry a <code>microsre_</code> prefix with dots turned into underscores - <code>mem.utilization_pct</code> becomes <code>microsre_mem_utilization_pct</code>. Per-core, per-device, and per-interface families become labels instead: <code>microsre_cpu_utilization_per_core{core="cpu0"}</code>, <code>microsre_disk_await_ms{device="sda"}</code>, <code>microsre_net_rx_bytes_per_sec{iface="eth0"}</code>. Everything is a gauge. Non-numeric fields (hostnames, error text, the max-util summaries' device names) are not exported.</p>
 
 <hr>
 
@@ -388,9 +406,9 @@ name = "nginx"
 path = "/var/log/nginx/error.log"
 error_pattern = "\\[error\\]|\\[crit\\]|\\[alert\\]|\\[emerg\\]"</code></pre>
 
-<pre><code>"logs.nginx.error_count" = { max = 10, consecutive = 2, template = "logs" }</code></pre>
+<pre><code>"logs.nginx.error_count" = { max = 10, duration = 120, template = "logs" }</code></pre>
 
-<p>This fires when at least 10 error-level lines appear in each of two consecutive checks, and uses the <code>logs</code> template which includes the recent error lines.</p>
+<p>This fires when at least 10 error-level lines appear per check and the total stays above the threshold for 120 seconds, and uses the <code>logs</code> template which includes the recent error lines.</p>
 
 <h3>Docker logs</h3>
 
@@ -431,7 +449,7 @@ chat_id = "-1001234567890"</code></pre>
 <h3>How alerts fire</h3>
 
 <ul>
-  <li>An alert fires when a value crosses <code>max</code> (or <code>min</code>) and stays crossed for <code>consecutive</code> checks.</li>
+  <li>An alert fires when a value crosses <code>max</code> (or <code>min</code>) and stays crossed for the rule's <code>duration</code> (in seconds).</li>
   <li>While an alert is active it is not re-sent. With <code>recovery_margin</code> set, one "Recovered" message goes out when the value returns within the margin.</li>
   <li>Every alert and recovery is also written to syslog.</li>
   <li>Message text comes from <code>[[templates]]</code> - see <a href="#configuration">Configuration</a> for the placeholder reference. Telegram messages get MarkdownV2 escaping automatically.</li>
