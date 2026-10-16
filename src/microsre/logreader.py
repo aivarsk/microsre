@@ -8,21 +8,33 @@ import time
 from functools import cache
 from typing import Any
 
+from microsre import state
 from microsre.core import config, log
 
 
 class File:
-    def __init__(self, path, tail=True):
+    def __init__(self, path, tail=True, offset=None):
         self.path = path
+        self.st_ino = -1
+        self.st_dev = -1
+        self.pos = 0
         try:
             st = os.stat(self.path)
-            self.st_ino = st.st_ino
-            self.st_dev = st.st_dev
-            self.pos = st.st_size if tail else 0
         except FileNotFoundError:
-            self.st_ino = -1
-            self.st_dev = -1
-            self.pos = 0
+            return
+
+        # Adopt a persisted position only for the same inode and an intact file
+        if offset:
+            o_ino, o_dev, o_pos = offset
+            if st.st_ino == o_ino and st.st_dev == o_dev and st.st_size >= o_pos:
+                self.st_ino = st.st_ino
+                self.st_dev = st.st_dev
+                self.pos = o_pos
+                return
+
+        self.st_ino = st.st_ino
+        self.st_dev = st.st_dev
+        self.pos = st.st_size if tail else 0
 
     def poll(self):
         try:
@@ -63,9 +75,9 @@ class File:
 
 
 class Logfile:
-    def __init__(self, name, path):
+    def __init__(self, name, path, offset=None):
         self.name = name
-        self.file = File(path)
+        self.file = File(path, offset=offset)
 
     def poll(self, _since):
         yield self.name, None
@@ -135,15 +147,17 @@ class OOM:
 class Docker:
     CONTAINER_NUMBER = "com.docker.compose.container-number"
 
-    def __init__(self, whitelist=None):
+    def __init__(self, whitelist=None, offsets=None, base="/var/lib/docker/containers"):
         self.whitelist = whitelist
-        if os.geteuid() == 0:
+        self.base = base
+        if os.access(base, os.R_OK | os.X_OK):
             self.containers = {}
-            self._docker_ps(tail=True)
+            self._docker_ps(tail=True, offsets=offsets)
             self.poll = self._poll_file
         else:
             try:
                 output_of("docker", "ps")
+                self.seen = set()
                 self.poll = self._poll_docker
             except ValueError:
                 self.poll = lambda since: iter(())
@@ -151,18 +165,19 @@ class Docker:
     def _real_name(self, name, num):
         return name.removesuffix("-" + num).removesuffix("_" + num) if num else name
 
-    def _docker_ps(self, tail=False):
+    def _docker_ps(self, tail=False, offsets=None):
         try:
-            containers = os.listdir("/var/lib/docker/containers/")
+            containers = os.listdir(self.base)
         except FileNotFoundError:
             return
         for container in containers:
             if container in self.containers:
                 continue
 
-            if os.path.exists(f"/var/lib/docker/containers/{container}/{container}-json.log"):
+            path = os.path.join(self.base, container, container + "-json.log")
+            if os.path.exists(path):
                 with contextlib.suppress(json.JSONDecodeError, KeyError, FileNotFoundError):
-                    with open(f"/var/lib/docker/containers/{container}/config.v2.json") as f:
+                    with open(os.path.join(self.base, container, "config.v2.json")) as f:
                         cfg = json.load(f)
                     name = cfg["Name"][1:]
                     name = self._real_name(
@@ -174,10 +189,7 @@ class Docker:
 
                     self.containers[container] = (
                         name,
-                        File(
-                            f"/var/lib/docker/containers/{container}/{container}-json.log",
-                            tail,
-                        ),
+                        File(path, tail, offset=(offsets or {}).get((name, path))),
                     )
 
     def _poll_file(self, since):
@@ -189,15 +201,23 @@ class Docker:
                     yield name, json.loads(line)["log"]
 
     def _poll_docker(self, since):
-        for name_num in output_of(
-            "docker",
-            "ps",
-            '--format={{.Names}},{{.Label "' + self.CONTAINER_NUMBER + '"}}',
-        ).splitlines():
+        try:
+            listing = output_of(
+                "docker",
+                "ps",
+                '--format={{.Names}},{{.Label "' + self.CONTAINER_NUMBER + '"}}',
+            ).splitlines()
+        except ValueError:
+            # Daemon unreachable: report every known container as silent
+            listing = []
+
+        running = set()
+        for name_num in listing:
             full_name, num = name_num.split(",")
             name = self._real_name(full_name, num)
             if self.whitelist and name not in self.whitelist:
                 continue
+            running.add(name)
             yield name, None  # tick
             try:
                 output = output_of("docker", "logs", "--since", since.isoformat(), full_name)
@@ -206,12 +226,22 @@ class Docker:
                 continue
             for line in output.splitlines():
                 yield name, line
+        for name in self.seen - running:
+            yield name, None  # tick: known but stopped, heartbeats keep aging
+        self.seen.update(running)
 
 
 class LineCounter:
-    def __init__(self, poller, error_pattern, line_pattern):
+    def __init__(
+        self, poller, error_pattern, line_pattern, heartbeat_pattern=None, heartbeat_seed=0.0, metric_prefix=None
+    ):
         self.line_re = re.compile(line_pattern)
         self.error_re = re.compile(error_pattern)
+        self.heartbeat_pattern = heartbeat_pattern
+        self.heartbeat_re = re.compile(heartbeat_pattern) if heartbeat_pattern else None
+        # 0 = never seen, or the pattern changed since the clock was persisted
+        self.heartbeat_last_seen = heartbeat_seed
+        self.metric_prefix = metric_prefix
         self.poller = poller
 
     def poll(self, since):
@@ -229,9 +259,21 @@ class LineCounter:
             )
             if line and self.line_re.search(line):
                 stat["line_count"] += 1
+                if self.heartbeat_re and self.heartbeat_re.search(line):
+                    self.heartbeat_last_seen = time.time()
+                    if self.metric_prefix:
+                        state.touch_heartbeat(
+                            f"{self.metric_prefix}.{name}.heartbeat_last_seen",
+                            self.heartbeat_pattern,
+                            self.heartbeat_last_seen,
+                        )
                 if self.error_re.search(line):
                     stat["error_count"] += 1
                     stat["errors"].append(line)
+
+        if self.heartbeat_re:
+            for stat in stats.values():
+                stat["heartbeat_last_seen"] = self.heartbeat_last_seen
         return stats.values()
 
 
@@ -245,14 +287,21 @@ def get_logfiles(fail=False):
     logfiles = []
     for entry in config().get("logs", []):
         try:
+            name = entry["name"]
+            pattern = entry.get("heartbeat_pattern")
+            stored = _heartbeats.get(f"logs.{name}.heartbeat_last_seen")
             logfiles.append(
                 LineCounter(
                     Logfile(
-                        name=entry["name"],
+                        name=name,
                         path=entry["path"],
+                        offset=_offsets.get((name, entry["path"])),
                     ),
                     error_pattern=entry.get("error_pattern", ".*"),
                     line_pattern=entry.get("line_pattern", ".*"),
+                    heartbeat_pattern=pattern,
+                    heartbeat_seed=stored[1] if stored and stored[0] == pattern else 0.0,
+                    metric_prefix="logs",
                 )
             )
         except Exception as exc:
@@ -267,11 +316,19 @@ def get_dockerlogs(fail=False):
     logfiles = []
     for entry in config().get("docker-logs", []):
         try:
+            docker = Docker(entry.get("containers"), offsets=_docker_offsets)
+            pattern = entry.get("heartbeat_pattern")
+            # Container names do not exist until discovered, so seed by pattern
+            # identity: a changed pattern starts over, like the file sources.
+            seeds = [ls for m, (p, ls) in _heartbeats.items() if p == pattern and m.startswith("docker-logs.")]
             logfiles.append(
                 LineCounter(
-                    Docker(entry.get("containers")),
+                    docker,
                     error_pattern=entry.get("error_pattern", ".*"),
                     line_pattern=entry.get("line_pattern", ".*"),
+                    heartbeat_pattern=pattern,
+                    heartbeat_seed=max(seeds, default=0.0),
+                    metric_prefix="docker-logs",
                 )
             )
         except Exception as exc:
@@ -281,10 +338,45 @@ def get_dockerlogs(fail=False):
     return logfiles
 
 
-def init_logs(fail=False):
+_offsets = {}
+_docker_offsets = {}
+_heartbeats = {}
+
+
+def init_logs(fail=False, offsets=None):
+    offsets = offsets or {}
+    _offsets.clear()
+    _docker_offsets.clear()
+    _heartbeats.clear()
+    _heartbeats.update(state.load_heartbeats())
+
+    # Catching up after a restart is applied to heartbeat sources only: replayed
+    # error lines would alert on stale errors, a missed heartbeat would false-fire.
+    log_keys = {(e.get("name"), e.get("path")) for e in config().get("logs", []) if e.get("heartbeat_pattern")}
+    _offsets.update({k: v for k, v in offsets.items() if k in log_keys})
+
+    entries = [e for e in config().get("docker-logs", []) if e.get("heartbeat_pattern")]
+    if any(not e.get("containers") for e in entries):
+        _docker_offsets.update(offsets)  # an entry without a list watches all containers
+    else:
+        names = {n for e in entries for n in e.get("containers", [])}
+        _docker_offsets.update({k: v for k, v in offsets.items() if k[0] in names})
+
     _ = get_oom()
     _ = get_logfiles(fail)
     _ = get_dockerlogs(fail)
+
+
+def file_offsets(counters=None):
+    """Current read positions of configured sources, for state.save()."""
+    result = {}
+    for counter in counters or (get_logfiles() + get_dockerlogs()):
+        poller = counter.poller
+        files = poller.containers.values() if isinstance(poller, Docker) else ((poller.name, poller.file),)
+        for name, f in files:
+            if f.st_ino > 0:
+                result[(name, f.path)] = (f.st_ino, f.st_dev, f.pos)
+    return result
 
 
 def collect_logs(since):
@@ -319,3 +411,5 @@ def add_logs(logs, row):
         m["line_count"] += row["line_count"]
         m["error_count"] += row["error_count"]
         m["errors"] += row["errors"]
+        if "heartbeat_last_seen" in row:
+            m["heartbeat_last_seen"] = max(m.get("heartbeat_last_seen", 0), row["heartbeat_last_seen"])

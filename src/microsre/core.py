@@ -46,10 +46,18 @@ def _write_private(path, data):
             f.write(data)
 
 
-def _id_path():
+def state_dir():
     app_dir = _app_dir("/var/lib", "XDG_STATE_HOME", "~/.local/state")
     app_dir.mkdir(parents=True, exist_ok=True)
-    return app_dir / "machine-id"
+    return app_dir
+
+
+def state_db_path():
+    return state_dir() / "state.sqlite"
+
+
+def _id_path():
+    return state_dir() / "machine-id"
 
 
 @functools.lru_cache(maxsize=1)
@@ -116,6 +124,7 @@ def banner():
     print("    Config file:", _config_path())
     print("       Log file:", _log_path())
     print("Machine ID file:", _id_path())
+    print("     State file:", state_db_path())
 
 
 log = _setup_logger()

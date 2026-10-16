@@ -7,10 +7,10 @@ import threading
 import time
 import traceback
 
-from microsre import prom
+from microsre import prom, state
 from microsre.alert import configured_alerts
 from microsre.core import banner, config, ingest, log, worker
-from microsre.logreader import collect_logs, init_logs
+from microsre.logreader import collect_logs, file_offsets, init_logs
 from microsre.metrics import calculate_metrics
 from microsre.procfs import collect_procfs, sample_procfs
 from microsre.text import dashboard
@@ -41,8 +41,24 @@ def lifecycle(daemon):
     yield event
 
 
+def _alert_settings():
+    """Local alert rules, so the hosted view can render thresholds and coverage gaps."""
+    return [
+        {
+            "metric": alert.metric,
+            "min": alert.min_threshold,
+            "max": alert.max_threshold,
+            "duration": alert.duration,
+            "recovery_margin": alert.recovery_margin,
+        }
+        for alert in configured_alerts()
+    ]
+
+
 def on_tick_report(metrics, raw):
-    ingest("tick", {"metrics": metrics, "raw": raw})
+    # No raw data leaves the machine: metrics plus the local alert rules, so the
+    # hosted view can show thresholds and where no alert is configured.
+    ingest("tick", {"metrics": metrics, "alerts": _alert_settings()})
     prom.publish(metrics)
     for alert in configured_alerts():
         alert.evaluate(metrics, time.monotonic())
@@ -55,16 +71,38 @@ def on_tick_snapshot(metrics, raw):
         alert.evaluate(metrics, time.monotonic())
         if alert.alerting:
             print(alert.metric, end=" ")
-    print()
+    print(flush=True)
+
+
+def _check_interval(interval):
+    if not isinstance(interval, int) or interval < 5:
+        raise ValueError(f"Invalid interval {interval!r}, expected an int of at least 5 seconds")
 
 
 def run_monitoring_loop(interval, daemon, on_tick):
+    # The unattended loop gets a floor; foreground --snapshot sets its own pace.
+    if daemon:
+        _check_interval(interval)
+
+    # Offsets from a recent-enough shutdown let heartbeat sources catch up.
+    # Invalid log configuration refuses to start: a silently dropped source
+    # would mean silently missing monitoring.
+    saved_offsets, offsets_saved_at = state.load()
+    if not offsets_saved_at:
+        saved_offsets = {}
+    elif time.time() - offsets_saved_at > state.FRESH_SECONDS:
+        if daemon:
+            # Saved positions too old to trust: sources tail to end instead of
+            # catching up, so a gap in log coverage is possible.
+            ingest("stale_offsets", {})
+        saved_offsets = {}
+    init_logs(fail=True, offsets=saved_offsets)
+
     with lifecycle(daemon) as stop:
         timer = time.monotonic()
         since = timestamp = time.time()
         previous = {}
         previous.update(collect_procfs(timestamp))
-        init_logs()
         last = time.monotonic()
 
         while not stop.wait(max(interval - (time.monotonic() - timer), 0)):
@@ -78,6 +116,7 @@ def run_monitoring_loop(interval, daemon, on_tick):
                 next_since = time.time()
                 current.update(collect_logs(since))
                 since = next_since
+                state.save(file_offsets())
 
                 with contextlib.suppress(TimeoutError):
                     samples_ready.result(timeout=1)
@@ -127,9 +166,7 @@ def main():
             init_logs(fail=True)
             configured_alerts(fail=True)
             prom.parse_listen(config())
-            interval = config().get("interval", 60)
-            if not isinstance(interval, int) or interval < 5:
-                raise ValueError(f"Invalid interval {interval!r}, expected an int of at least 5 seconds")
+            _check_interval(config().get("interval", 60))
             print("Configuration file valid")
         except Exception as exc:
             print(f"Invalid configuration file: {exc!r}")
@@ -138,9 +175,17 @@ def main():
         banner()
     elif args.snapshot is not None:
         config()
-        run_monitoring_loop(args.snapshot, False, on_tick_snapshot)
+        run_or_exit(args.snapshot, False, on_tick_snapshot)
     elif args.daemon:
         config()
-        run_monitoring_loop(config().get("interval", 60), True, on_tick_report)
+        run_or_exit(config().get("interval", 60), True, on_tick_report)
     else:
         parser.print_help()
+
+
+def run_or_exit(interval, daemon, on_tick):
+    try:
+        run_monitoring_loop(interval, daemon, on_tick)
+    except Exception as exc:
+        print(f"Cannot start: {exc!r}")
+        sys.exit(1)

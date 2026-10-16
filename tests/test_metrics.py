@@ -1,3 +1,4 @@
+import time
 import unittest
 
 from testutil import isolate_xdg
@@ -283,6 +284,43 @@ class TestSelfMetrics(unittest.TestCase):
         self.assertEqual(metrics["self.cpu_pct"], 0)
         self.assertEqual(metrics["self.read_bytes_per_sec"], 0)
         self.assertEqual(metrics["self.ctx_switches_per_sec"], 0)
+
+
+class TestHeartbeatAge(unittest.TestCase):
+    def row(self, **kw):
+        row = {"name": "batch", "line_count": 1, "error_count": 0, "errors": []}
+        row.update(kw)
+        return {"logs": {"batch": row}}
+
+    def test_age_is_seconds_since_last_match(self):
+        end = snapshot(**self.row(heartbeat_last_seen=time.time() - 100))
+        metrics = calculate_metrics(snapshot(), end, INTERVAL)
+        self.assertAlmostEqual(metrics["logs.batch.heartbeat_age_seconds"], 100, delta=2)
+        self.assertAlmostEqual(metrics["logs.batch.heartbeat_last_seen"], time.time() - 100, delta=2)
+        self.assertEqual(
+            metrics["logs.batch.heartbeat_status"],
+            f"not seen for {int(metrics['logs.batch.heartbeat_age_seconds'])} seconds",
+        )
+
+    def test_never_seen_reports_huge_age_and_plain_status(self):
+        end = snapshot(**self.row(heartbeat_last_seen=0))
+        metrics = calculate_metrics(snapshot(), end, INTERVAL)
+        self.assertAlmostEqual(metrics["logs.batch.heartbeat_age_seconds"], time.time(), delta=2)
+        self.assertEqual(metrics["logs.batch.heartbeat_last_seen"], 0)
+        self.assertEqual(metrics["logs.batch.heartbeat_status"], "not seen yet")
+
+    def test_future_timestamp_clamps_to_zero(self):
+        end = snapshot(**self.row(heartbeat_last_seen=time.time() + 500))
+        metrics = calculate_metrics(snapshot(), end, INTERVAL)
+        self.assertEqual(metrics["logs.batch.heartbeat_age_seconds"], 0)
+        self.assertEqual(metrics["logs.batch.heartbeat_status"], "not seen for 0 seconds")
+
+    def test_source_without_heartbeat_has_no_metrics(self):
+        end = snapshot(**self.row())
+        metrics = calculate_metrics(snapshot(), end, INTERVAL)
+        self.assertNotIn("logs.batch.heartbeat_age_seconds", metrics)
+        self.assertNotIn("logs.batch.heartbeat_last_seen", metrics)
+        self.assertNotIn("logs.batch.heartbeat_status", metrics)
 
 
 class TestAlertable(unittest.TestCase):

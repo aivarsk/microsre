@@ -6,13 +6,14 @@
 # Expose metrics for Prometheus scraping
 # prometheus_listen = "127.0.0.1:9100"
 
-# Seconds between checks in daemon mode
+# Seconds between checks in daemon mode (minimum 5)
 interval = 60
 
-# No webhook_url - no alerts
+# No webhook_url - no chat alerts (they still go to the system log).
 # webhook_url = "https://hooks.slack.com/services/..."
 # or: webhook_url = "https://discord.com/api/webhooks/..."
 # or: webhook_url = "https://api.telegram.org/bot<token>/sendMessage"
+# or any URL that accepts a JSON POST with a "text" field - your own receiver.
 # username = "microsrebot"
 # chat_id = "-1001234567890"  # Telegram only
 
@@ -70,6 +71,18 @@ error_pattern = ".(ERROR|CRITICAL|FATAL)."
 #line_pattern = "^\\d{4}-\\d{2}-\\d{2}"   # starts with timestamp
 #error_pattern = ".(ERROR|CRITICAL|FATAL)."
 
+# Heartbeat (dead man's switch): alert when a source stops logging its
+# "still alive" line - batch jobs, cron, queue workers.
+# heartbeat_age_seconds is seconds since heartbeat_pattern last matched; the
+# last-seen time survives restarts in state.sqlite. An edited pattern starts
+# over ("not seen yet"), so a typo alerts within one interval.
+#[[logs]]
+#name = "nightly-batch"
+#path = "/var/log/nightly-batch.log"
+#heartbeat_pattern = "batch (done|finished)"
+# then: "logs.nightly-batch.heartbeat_age_seconds" = { max = 87000, duration = 0, recovery_margin = 0, template = "heartbeat" }
+# (24h + 20 min of drift in seconds; duration can absorb a late tick or two)
+
 [[templates]]
 name = "oom"
 title = "🔥 {oom.count} OOM kill(s) on {hostname}"
@@ -107,6 +120,16 @@ body = """*{timestamp}*
 {net.tcp.listen_overflows} listen overflow(s), {net.tcp.listen_drops} dropped connection(s) during the last check.
 
 Check the backlog: `ss -lnt` (Send-Q vs Recv-Q), `nstat | grep -i listen`
+"""
+
+[[templates]]
+name = "heartbeat"
+title = "💔 No heartbeat from {scope.name} on {hostname}"
+body = """*{timestamp}*
+
+{scope.heartbeat_status} (threshold {metric.max} seconds).
+
+The job may be dead or stuck. Check: `systemctl status` the service or `tail` the log
 """
 
 [[templates]]

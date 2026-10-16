@@ -220,6 +220,16 @@ def _known_metrics():
                 )
             )
         )
+        if entry.get("heartbeat_pattern"):
+            metrics.update(
+                dict.fromkeys(
+                    (
+                        f"logs.{name}.heartbeat_last_seen",
+                        f"logs.{name}.heartbeat_age_seconds",
+                        f"logs.{name}.heartbeat_status",
+                    )
+                )
+            )
     for entry in config().get("docker-logs", []):
         for name in entry.get("containers", []):
             metrics.update(
@@ -233,5 +243,15 @@ def _known_metrics():
                     )
                 )
             )
+            if entry.get("heartbeat_pattern"):
+                metrics.update(
+                    dict.fromkeys(
+                        (
+                            f"docker-logs.{name}.heartbeat_last_seen",
+                            f"docker-logs.{name}.heartbeat_age_seconds",
+                            f"docker-logs.{name}.heartbeat_status",
+                        )
+                    )
+                )
 
     return metrics

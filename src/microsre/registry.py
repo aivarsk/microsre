@@ -11,7 +11,7 @@ def _pressure(prefix):
 
 
 # Single source of truth for every metric the product knows about.
-# (family, display, names, prom, source, fields, alertable)
+# (family, display, names, prom, source, fields, alertable, semantics)
 #   names - literal internal metric names, feed alert.py KNOWN and prom HELP
 #   prom  - labeled-family prom base names (without the microsre_ prefix)
 # Keep display/fields in sync with docs/readme.html via generate_docs.py.
@@ -24,6 +24,7 @@ ROWS = (
         "/proc/meminfo",
         "MemTotal, MemAvailable (used = total - available)",
         True,
+        "instantaneous",
     ),
     (
         "Memory",
@@ -33,6 +34,7 @@ ROWS = (
         "/proc/meminfo",
         "SwapTotal, SwapFree",
         True,
+        "instantaneous",
     ),
     (
         "Memory",
@@ -42,6 +44,7 @@ ROWS = (
         "/proc/pressure/memory",
         "some / full line, avg10 / avg60",
         True,
+        "instantaneous (kernel-windowed)",
     ),
     #
     (
@@ -52,6 +55,7 @@ ROWS = (
         "/proc/stat",
         "cpu line - user, nice, system, idle, iowait, irq, softirq, steal ticks, diffed over the interval",
         True,
+        "integral",
     ),
     (
         "CPU",
@@ -61,6 +65,7 @@ ROWS = (
         "/proc/stat",
         "cpuN per-core lines",
         True,
+        "integral",
     ),
     (
         "CPU",
@@ -70,6 +75,7 @@ ROWS = (
         "/proc/loadavg",
         "1 min field",
         True,
+        "instantaneous (kernel-decayed)",
     ),
     (
         "CPU",
@@ -79,6 +85,7 @@ ROWS = (
         "/proc/stat",
         "procs_running, max of 5 samples 50ms apart; per_cpu is a pct of cpu.count",
         True,
+        "instantaneous (burst max of 5)",
     ),
     (
         "CPU",
@@ -88,6 +95,7 @@ ROWS = (
         "/proc/pressure/cpu",
         "some / full line, avg10 / avg60",
         True,
+        "instantaneous (kernel-windowed)",
     ),
     #
     (
@@ -98,6 +106,7 @@ ROWS = (
         "/proc/self/mountinfo",
         "per-mount statvfs bytes used / total; each device counted once",
         True,
+        "instantaneous",
     ),
     (
         "Disk",
@@ -107,6 +116,7 @@ ROWS = (
         "/proc/diskstats",
         "per device: time_in_progress diff; await = (time_reading + time_writing) / (reads + writes); queue depth = in_progress gauge; stacked dm/md deduplicated to the backing disk",
         True,
+        "integral; instantaneous (queue depth)",
     ),
     (
         "Disk",
@@ -116,6 +126,7 @@ ROWS = (
         "/proc/diskstats",
         "sectors_read / sectors_written x sector size",
         True,
+        "integral",
     ),
     (
         "Disk",
@@ -125,6 +136,7 @@ ROWS = (
         "/proc/diskstats",
         "reads / writes completed",
         True,
+        "counter",
     ),
     (
         "Disk",
@@ -134,6 +146,7 @@ ROWS = (
         "/proc/pressure/io",
         "some / full line, avg10 / avg60",
         True,
+        "instantaneous (kernel-windowed)",
     ),
     (
         "Disk",
@@ -152,6 +165,7 @@ ROWS = (
         "/proc/diskstats",
         "per-device counters, diffs over the check interval",
         False,
+        "integral; instantaneous (queue depth)",
     ),
     #
     (
@@ -162,6 +176,7 @@ ROWS = (
         "/proc/net/dev",
         "sum of per-interface rx_bytes / tx_bytes",
         True,
+        "integral",
     ),
     (
         "Network",
@@ -171,6 +186,7 @@ ROWS = (
         "/proc/net/dev",
         "rx_errs + tx_errs, rx_drop + tx_drop",
         True,
+        "counter",
     ),
     (
         "Network",
@@ -180,6 +196,7 @@ ROWS = (
         "/proc/net/snmp",
         "Tcp: - RetransSegs, OutSegs",
         True,
+        "counter",
     ),
     (
         "Network",
@@ -189,6 +206,7 @@ ROWS = (
         "/proc/net/netstat",
         "TcpExt: - ListenDrops, ListenOverflows",
         True,
+        "counter",
     ),
     (
         "Network",
@@ -198,6 +216,7 @@ ROWS = (
         "/proc/net/dev + /sys/class/net/<iface>/speed",
         "max of rx/tx bytes x8 as % of link speed",
         True,
+        "integral",
     ),
     (
         "Network",
@@ -207,6 +226,7 @@ ROWS = (
         "/proc/net/dev",
         "busiest interface by bytes",
         True,
+        "integral",
     ),
     (
         "Network",
@@ -226,6 +246,7 @@ ROWS = (
         "/proc/net/dev",
         "per-interface counters, diffs over the check interval",
         False,
+        "integral; counter (errs, drop)",
     ),
     #
     (
@@ -236,6 +257,7 @@ ROWS = (
         "kernel log (auto-detected, no config)",
         "OOM killer events",
         True,
+        "counter",
     ),
     #
     (
@@ -244,8 +266,9 @@ ROWS = (
         (),
         (),
         "the configured log file or container JSON logs",
-        "line_count / error_count / error_pct / errors - lines matching line_pattern / error_pattern",
+        "line_count / error_count / error_pct / errors - lines matching line_pattern / error_pattern; with heartbeat_pattern configured: heartbeat_last_seen (unix time of last match, 0 = never), heartbeat_age_seconds (seconds since it, huge when never), heartbeat_status (pre-worded 'not seen yet' / 'not seen for N seconds' for templates)",
         False,
+        "counter; gauge (heartbeat age)",
     ),
     #
     (
@@ -256,6 +279,7 @@ ROWS = (
         "self-measured, time.monotonic_ns() around the collectors",
         "procfs collection time per tick; proc_pid is the /proc/<pid> scan portion of it",
         True,
+        "measured duration",
     ),
     (
         "Collection",
@@ -265,6 +289,7 @@ ROWS = (
         "self-measured, time.monotonic_ns() around the collectors",
         "log scanning time per tick",
         True,
+        "measured duration",
     ),
     (
         "Collection",
@@ -280,6 +305,7 @@ ROWS = (
         "self-measured, /proc/self/stat, /proc/self/io, /proc/self/status",
         "microsre itself: total CPU seconds, CPU pct last interval, RSS, storage reads caused, wakeups per second",
         True,
+        "mixed: counter, integral, instantaneous",
     ),
 )
 
@@ -291,13 +317,13 @@ def to_prom(name):
     return "microsre_" + _PROM_NAME.sub("_", name)
 
 
-KNOWN = frozenset(name for _, _, names, _, _, _, alertable in ROWS if alertable for name in names) | frozenset(
+KNOWN = frozenset(name for _, _, names, _, _, _, _, alertable in ROWS if alertable for name in names) | frozenset(
     ("timestamp", "hostname", "uptime")
 )
 
 HELP = {
     to_prom(name): f"{fields} (source: {source})"
-    for _, _, names, prom, source, fields, _ in ROWS
+    for _, _, names, prom, source, fields, _, _ in ROWS
     for name in names + prom
 }
 
@@ -330,5 +356,13 @@ CAVEATS = (
     (
         "Network",
         "net.tcp.retrans_ratio_pct is meaningless while TcpOutSegs is near zero; net.tcp.listen_* need /proc/net/netstat, absent in some containers.",
+    ),
+    (
+        "Log sources",
+        "The heartbeat last-seen time is persisted in state.sqlite and survives restarts. An edited heartbeat_pattern starts over ('not seen yet'), so a broken pattern surfaces within one interval instead of one threshold. A beat that landed while microsre was down for over ten minutes is missed and can alert once - it self-heals at the next beat.",
+    ),
+    (
+        "Semantics",
+        "Metrics mix three semantics: integrals (CPU time, bytes - a burst smears across the window average), counters (retransmits, OOM kills, error lines - exact count in the window, no intra-window timing), and instantaneous samples (run queue, PSI, gauges - true at tick time; PSI is a kernel-windowed average on top). Size thresholds for the class: a 5-second spike can hide inside a calm 60-second integral, a counter sees the count but not the timing, and an instantaneous sample can miss the spike altogether.",
     ),
 )

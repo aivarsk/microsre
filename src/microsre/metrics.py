@@ -1,4 +1,5 @@
 import contextlib
+import time
 
 
 def _pct(value, total):
@@ -288,5 +289,12 @@ def calculate_metrics(start, end, interval):
                 metrics[f"{logs}.{name}.errors"] = "".join(stats["errors"][:3] + ["...\n"] + stats["errors"][-1:])
             else:
                 metrics[f"{logs}.{name}.errors"] = "".join(stats["errors"])
+            with contextlib.suppress(KeyError):
+                metrics[f"{logs}.{name}.heartbeat_last_seen"] = stats["heartbeat_last_seen"]
+                age = max(time.time() - stats["heartbeat_last_seen"], 0)
+                metrics[f"{logs}.{name}.heartbeat_age_seconds"] = age
+                metrics[f"{logs}.{name}.heartbeat_status"] = (
+                    "not seen yet" if not stats["heartbeat_last_seen"] else f"not seen for {int(age)} seconds"
+                )
 
     return metrics
