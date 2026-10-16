@@ -40,7 +40,7 @@ chmod +x "${BIN_DIR}/microsre"
 
 cat >"${SYSTEMD_DIR}/microsre.service" <<EOF
 [Unit]
-Description=60-second Linux health checks.
+Description=Linux health checks at your cadence.
 After=network.target
 
 [Service]

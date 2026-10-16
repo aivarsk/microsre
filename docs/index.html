@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>microSRE - Linux metrics without the baggage</title>
-  <meta name="description" content="microSRE runs 60-second Linux health checks from /proc and logs, then alerts in Slack, Discord, or Telegram. One file. No dashboards.">
+  <meta name="description" content="microSRE runs Linux health checks from /proc and logs at your cadence, then alerts in Slack, Discord, or Telegram. One file. No dashboards.">
   <meta property="og:title" content="microSRE - Linux metrics without the baggage">
   <meta property="og:description" content="Know when your Linux server needs you - without Prometheus, Grafana, or a metrics agent.">
   <meta property="og:type" content="website">
@@ -87,7 +87,7 @@
   <section class="hero text-center" id="install">
     <div class="container">
       <h1>microSRE</h1>
-      <p class="lead">60-second Linux health checks. Know when your server needs you - without Prometheus, Grafana, or a metrics agent.</p>
+      <p class="lead">Know when your server needs you.<br>Linux health checks at your cadence - no Prometheus, Grafana, or metrics agent.</p>
       <div class="mt-4">
         <div class="install-box">
           <button class="copy-btn" onclick="copyInstall(this)" data-cmd="curl -fsSL https://microsre.io/install.sh | bash">Copy</button>
@@ -115,8 +115,8 @@
     <div class="container">
       <h2>How it works</h2>
       <p>microSRE reads <code>/proc</code> directly - the same kernel interface that <code>ps</code>, <code>top</code>, and <code>iostat</code> use, but without the fragile parsing and version drift. It samples CPU, memory, disk I/O, and network counters, then diffs them to produce rates.</p>
-      <p><strong>What "needs you" means:</strong> for every resource - CPU, memory, disk, network - microSRE reports <em>utilization</em>, <em>saturation</em>, and <em>errors</em>, the USE-method taxonomy, from whatever the kernel exposes. CPU: utilization and run queue. Memory: utilization, pressure-stall averages, and OOM kills. Disk: utilization, await, and queue depth. Network: throughput, TCP retransmits, and listen-backlog overflows. Thresholds are yours to set; the signals are the kernel's.</p>
-      <p>It also watches application logs you specify, matching each line against error patterns. When error volume crosses your threshold in a time window, it alerts. No SDK to install, no code to instrument, no vendor to depend on. And it measures itself: every tick reports how long its own collection took (<code>collect.*_seconds</code>), so its cost is checkable on your machine, not promised in a README.</p>
+      <p><strong>What "needs you" means:</strong> for every resource - CPU, memory, disk, network - microSRE reports <em>utilization</em>, <em>saturation</em>, and <em>errors</em>, the USE-method taxonomy, from whatever the kernel exposes. CPU: utilization and run queue. Memory: utilization, pressure-stall averages, and OOM kills. Disk: utilization, await, and queue depth. Network: throughput, TCP retransmits, and listen-backlog overflows. Thresholds are yours to set; the signals are the kernel's. The default 60-second cadence nods to the classic 60-second Linux checklist - the same discipline, automated and always on. The interval is yours too: 10 seconds if your tail is chatty, longer if it is not.</p>
+      <p>It also watches application logs you specify, matching each line against error patterns. When error volume crosses your threshold in a time window, it alerts. No SDK to install, no code to instrument, no vendor to depend on. And it measures itself: every tick reports its own collection time (<code>collect.*_seconds</code>) and its footprint - CPU time, memory, storage reads caused, wakeups (<code>self.*</code>) - so its cost is checkable on your machine, not promised in a README.</p>
       <p>Alerts go to Slack, Discord, or Telegram. That channel is the record. No dashboards. No data-source sprawl. No lock-in. Your metrics, your logs, your machine.</p>
       <div class="alert alert-secondary mt-3" role="alert">
         <strong>No root required.</strong> Runs as a regular user out of the box - every /proc signal, your log files, and OOM-kill detection via the system journal. Root (or the docker group) adds container log scanning - useful, not required.
@@ -191,7 +191,7 @@ Check the backlog: `ss -lnt` (Send-Q vs Recv-Q), `nstat | grep -i listen`</pre>
     <div class="container">
       <h2>Across your fleet</h2>
       <p><strong>Built for fleets of pets, not herds of cattle</strong> - the tens of servers you know by name, not thousands you don't.</p>
-      <p>Running a fleet means deciding across machines, not staring at one. The hosted view is your command and control center: the same 60-second health check for every server, every signal in one place - alerts and next actions based on the whole picture, not a single metric in isolation. A ward monitor for your infrastructure - every server's vitals at a glance, anomalies raised - not another dashboard builder. With a longer history and advanced alerting rules. Logs never leave your machines, and no continuous metric stream does either; the hosted view receives only the periodic health summary and alert state.</p>
+      <p>Running a fleet means deciding across machines, not staring at one. The hosted view is your command and control center: the same health check for every server, every signal in one place - alerts and next actions based on the whole picture, not a single metric in isolation. A ward monitor for your infrastructure - every server's vitals at a glance, anomalies raised - not another dashboard builder. With a longer history and advanced alerting rules. Logs never leave your machines, and no continuous metric stream does either; the hosted view receives only the periodic health summary and alert state.</p>
 
       <p><strong>Private beta includes:</strong></p>
 

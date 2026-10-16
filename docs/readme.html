@@ -175,13 +175,13 @@ systemctl --user start microsre</code></pre>
 
 <pre><code>microsre --snapshot</code></pre>
 
-<p>The dashboard prints every 60 seconds and shows which alerts <em>would</em> fire. Snapshot mode is a dry run - nothing is sent.</p>
+<p>The dashboard prints every check - 60 seconds by default, change it with the <code>interval</code> setting - and shows which alerts <em>would</em> fire. Snapshot mode is a dry run - nothing is sent.</p>
 
 <p>5. Start the daemon:</p>
 
 <pre><code>microsre --daemon</code></pre>
 
-<p>The daemon checks every 60 seconds and sends an alert the moment a threshold is crossed.</p>
+<p>The daemon checks on the same interval and sends an alert the moment a threshold is crossed.</p>
 
 <hr>
 
@@ -191,7 +191,7 @@ systemctl --user start microsre</code></pre>
 
 <ul>
   <li><code>--snapshot [SECONDS]</code> - run in the foreground, print the metrics dashboard every N seconds (default 60). Alerts are evaluated and displayed, but nothing is sent.</li>
-  <li><code>--daemon</code> - run the monitoring loop: check every 60 seconds, send alerts, and report to the hosted view when <code>ingest_url</code> is set.</li>
+  <li><code>--daemon</code> - run the monitoring loop: check every <code>interval</code> seconds (default 60), send alerts, and report to the hosted view when <code>ingest_url</code> is set.</li>
   <li><code>--verify</code> - validate the configuration file: TOML syntax, webhook URL, alert rules, log sources, and template placeholders.</li>
   <li><code>--version</code> - show the version and the locations of the config file, log file, and machine ID file.</li>
 </ul>
@@ -325,6 +325,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr><td class="group" colspan="3">Collection</td></tr>
 <tr><td><code>collect.procfs_seconds, collect.proc_pid_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>procfs collection time per tick; proc_pid is the /proc/&lt;pid&gt; scan portion of it</td></tr>
 <tr><td><code>collect.logs_seconds, collect.docker_logs_seconds, collect.oom_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>log scanning time per tick</td></tr>
+<tr><td><code>self.cpu_seconds, self.cpu_pct, self.rss_bytes, self.read_bytes_per_sec, self.ctx_switches_per_sec</code></td><td><code>self-measured, /proc/self/stat, /proc/self/io, /proc/self/status</code></td><td>microsre itself: total CPU seconds, CPU pct last interval, RSS, storage reads caused, wakeups per second</td></tr>
 </table>
 
 <h4>Caveats</h4>
@@ -486,7 +487,7 @@ chat_id = "-1001234567890"</code></pre>
 
 <pre><code>ingest_url = "https://eu.microsre.io/ingest?token=&lt;your token&gt;"</code></pre>
 
-<p>3. Restart the daemon. The machine appears in your fleet view within one check, reports a heartbeat every 60 seconds, and sends "up" / "down" events on start and shutdown. If a machine stops checking in, the hosted view alerts - a dead man's switch, not a missing data point.</p>
+<p>3. Restart the daemon. The machine appears in your fleet view within one check, reports a heartbeat every check, and sends "up" / "down" events on start and shutdown. If a machine stops checking in, the hosted view alerts - a dead man's switch, not a missing data point.</p>
 
 <hr>
 
@@ -503,7 +504,7 @@ chat_id = "-1001234567890"</code></pre>
 <h3>High CPU from microSRE itself</h3>
 
 <ul>
-  <li>The daemon checks every 60 seconds; if it is too heavy, run in the foreground with a slower loop: <code>microsre --snapshot 120</code> or <code>--snapshot 300</code>.</li>
+  <li>The daemon checks every 60 seconds by default; if it is too heavy, set a longer <code>interval</code> in the config - or run a slower foreground loop: <code>microsre --snapshot 300</code>.</li>
   <li>Reduce the number of log files being tailed.</li>
   <li>Check if a log file is being written to at an extreme rate; microSRE reads every line.</li>
 </ul>
