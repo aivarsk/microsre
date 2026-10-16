@@ -81,7 +81,8 @@
     <a href="index.html" class="brand">microSRE</a>
     <a href="index.html">Home</a>
     <a href="readme.html">Documentation</a>
-    <a href="#saas">SaaS &#8599;</a>
+    <a href="pricing.html">Pricing</a>
+    <a href="index.html#saas">SaaS &#8599;</a>
   </nav>
 
   <section class="hero text-center" id="install">
@@ -177,6 +178,7 @@ Check the backlog: `ss -lnt` (Send-Q vs Recv-Q), `nstat | grep -i listen`</pre>
       <h2 class="mt-5">No hoarding</h2>
       <p>Most monitoring agents run a hoard-first pipeline: buffer every metric and every log line "just in case", then forward all of it to a remote store. microSRE does the opposite - it reads the source in place, acts on it, and keeps nothing beyond the current check. What to keep and for how long - logs local, archived, shipped, or sampled away - is your decision, not the agent's. (Traces are a different story: they answer questions metrics and logs structurally cannot, and shipping those is a reasonable choice. It is the ship-everything-by-default culture around metrics and logs we opt out of.)</p>
       <p>Notifications get the same treatment. On-call tools keep their own log of every page, acknowledgment, and escalation - a second incident history, stored inside the vendor's system. For a large org that audit trail earns its keep. But the alert already landed in your chat, the discussion happened there, and that history is searchable, backed up, and yours. Replaying last night's pages should not require logging into another tool. Where a formal trail is genuinely needed, it should be an explicit opt-in - like shipping logs or adding dashboards - not a side effect of being paged.</p>
+      <p>The agent is free and open source (MIT), forever; a hosted fleet view and dead-man escalation are coming - <a href="pricing.html">see plans</a>.</p>
     </div>
   </section>
 
@@ -191,7 +193,8 @@ Check the backlog: `ss -lnt` (Send-Q vs Recv-Q), `nstat | grep -i listen`</pre>
     <div class="container">
       <h2>Across your fleet</h2>
       <p><strong>Built for fleets of pets, not herds of cattle</strong> - the tens of servers you know by name, not thousands you don't.</p>
-      <p>The hosted view is optional - the standalone setup above is complete without it. What routes an alert is not severity but failure domain: who can still speak when which component dies? A sick host speaks for itself. A dead host cannot speak at all - silence can only be observed from outside. And comparing against time or other machines is aggregation, the one thing hosting genuinely adds. Critical alerts are delivered by your machines, never through us - the source of truth speaks for itself. Everything that requires comparing against silence, time, or other machines goes through the hosted service, which you can lose without losing your pages. Running a fleet means deciding across machines, not staring at one. The hosted view is your command and control center: the same health check for every server, every signal in one place - alerts and next actions based on the whole picture, not a single metric in isolation. A ward monitor for your infrastructure - every server's vitals at a glance, anomalies raised - not another dashboard builder. With a longer history and advanced alerting rules. Logs never leave your machines, and no raw data does either - no log lines, no /proc dumps; the hosted view receives only the metrics, the alert rules you configured, and alert state.</p>
+      <p>The hosted view is optional - the standalone setup above is complete without it. Alerts route by failure domain, not severity: a sick host speaks for itself, so critical alerts are delivered by your machines, never through us. A dead host cannot speak - silence can only be observed from outside, and comparing against time or other machines is aggregation. The hosted service does only that, and you can lose it without losing your pages.</p>
+      <p>The fleet view is spare: every server's health in one place, longer history, alerting rules that span machines. Not another dashboard builder. No log lines or /proc dumps leave your machines; the hosted view receives only your metrics, your alert rules, and alert state.</p>
 
       <p><strong>Private beta includes:</strong></p>
 
@@ -199,13 +202,13 @@ Check the backlog: `ss -lnt` (Send-Q vs Recv-Q), `nstat | grep -i listen`</pre>
         <li><strong>Dead man's switch</strong> - If a machine stops checking in, you know. No heartbeat means an alert, not a missing data point.</li>
         <li><strong>Only wake up for fires</strong> - Critical alerts page you immediately. Everything else batches into a digest or waits for business hours.</li>
         <li><strong>One digest, not ten pings</strong> - Medium alerts collect into a single timed summary with context and a suggested command. Route critical alerts to <code>#incidents</code>, digests to <code>#alerts</code> silently.</li>
-        <li><strong>Escalation without babysitting</strong> - If a medium alert persists, it automatically upgrades to critical after a timer you set. Historic baselines help tune thresholds.</li>
+        <li><strong>Escalation without babysitting</strong> - If a medium alert persists, it automatically upgrades to critical after a timer you set.</li>
       </ul>
 
       <p><strong>Designed into the split, not bolted on:</strong></p>
 
       <ul>
-        <li><strong>One alert identity, both paths</strong> - a warning raised by hosted aggregation and the critical alert it escalates into on the host share one alert ID (rule plus window), so nothing pages twice for the same incident. The same identity lets the fleet read "12 hosts fired the same alert at once" as what it usually is - the network, not them.</li>
+        <li><strong>One alert identity, both paths</strong> - every tick carries each alert rule and its firing state, so the hosted view always knows which hosts are alerting on what, and when they recover. A hosted rule about a condition the host is already paging for attaches to the same incident instead of paging again. The same identity lets the fleet read "12 hosts fired the same alert at once" as what it usually is - the network, not them.</li>
         <li><strong>No silent holes in the dead man's switch</strong> - the hosted service can be down too, and coming back must not simply resume. It re-evaluates the window it missed: "host X was silent for 40 minutes while we were down - alert now." A dead man's switch that fails silently is the exact failure this design exists to prevent.</li>
       </ul>
 

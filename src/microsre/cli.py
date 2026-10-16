@@ -42,7 +42,6 @@ def lifecycle(daemon):
 
 
 def _alert_settings():
-    """Local alert rules, so the hosted view can render thresholds and coverage gaps."""
     return [
         {
             "metric": alert.metric,
@@ -50,18 +49,18 @@ def _alert_settings():
             "max": alert.max_threshold,
             "duration": alert.duration,
             "recovery_margin": alert.recovery_margin,
+            "alerting": alert.alerting,
         }
         for alert in configured_alerts()
     ]
 
 
 def on_tick_report(metrics, raw):
-    # No raw data leaves the machine: metrics plus the local alert rules, so the
-    # hosted view can show thresholds and where no alert is configured.
-    ingest("tick", {"metrics": metrics, "alerts": _alert_settings()})
-    prom.publish(metrics)
+    # Evaluate first, so the tick carries this interval's alerting state.
     for alert in configured_alerts():
         alert.evaluate(metrics, time.monotonic())
+    ingest("tick", {"metrics": metrics, "alerts": _alert_settings()})
+    prom.publish(metrics)
 
 
 def on_tick_snapshot(metrics, raw):
@@ -92,8 +91,7 @@ def run_monitoring_loop(interval, daemon, on_tick):
         saved_offsets = {}
     elif time.time() - offsets_saved_at > state.FRESH_SECONDS:
         if daemon:
-            # Saved positions too old to trust: sources tail to end instead of
-            # catching up, so a gap in log coverage is possible.
+            # Sources tail to end instead of catching up: a coverage gap is possible.
             ingest("stale_offsets", {})
         saved_offsets = {}
     init_logs(fail=True, offsets=saved_offsets)

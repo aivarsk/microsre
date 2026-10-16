@@ -258,6 +258,7 @@ class TestDaemon(unittest.TestCase):
                                 "max": None,
                                 "duration": 0,
                                 "recovery_margin": 0,
+                                "alerting": True,
                             }
                         ]
                     )
