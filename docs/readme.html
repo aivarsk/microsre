@@ -230,7 +230,8 @@ systemctl --user start microsre</code></pre>
 interval = 60
 
 # Where alerts go (optional). Slack, Discord and Telegram webhook URLs are
-# auto-detected from the URL. No webhook_url - no alerts.
+# auto-detected from the URL; any other URL gets a plain JSON POST with a
+# "text" field. No webhook_url - no chat alerts (they still go to the system log).
 # webhook_url = "https://hooks.slack.com/services/..."
 # or: webhook_url = "https://discord.com/api/webhooks/..."
 # or: webhook_url = "https://api.telegram.org/bot&lt;token&gt;/sendMessage"
@@ -266,7 +267,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <h3>Top-level keys</h3>
 
 <ul>
-  <li><code>webhook_url</code> - single destination for alerts. Slack (<code>hooks.slack.com</code>), Discord (<code>discord.com/api/webhooks</code>), and Telegram (<code>api.telegram.org</code>) are auto-detected; any other URL is rejected by <code>--verify</code>. Omit to run without alerts.</li>
+  <li><code>webhook_url</code> - single destination for alerts, sent directly from your machine; the hosted service is not involved. Slack (<code>hooks.slack.com</code>), Discord (<code>discord.com/api/webhooks</code>), and Telegram (<code>api.telegram.org</code>) are auto-detected; any other URL receives a plain JSON POST with a <code>text</code> field, so your own receiver works too. Omit to run without chat alerts - alert lines still land in the system log.</li>
   <li><code>username</code> - bot display name for Slack and Discord. Defaults to <code>microsre</code>.</li>
   <li><code>chat_id</code> - Telegram only, required for Telegram webhooks.</li>
   <li><code>ingest_url</code> - report metrics and alerts to the microsre.io hosted view. See <a href="#fleet">Fleet / SaaS</a>.</li>
@@ -321,7 +322,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr><td class="group" colspan="4">OOM kills</td></tr>
 <tr><td><code>oom.count, oom.victims</code></td><td><code>kernel log (auto-detected, no config)</code></td><td>OOM killer events</td><td>counter</td></tr>
 <tr><td class="group" colspan="4">Log sources</td></tr>
-<tr><td><code>logs.&lt;source&gt;.*, docker-logs.&lt;source&gt;.* (per configured log source)</code></td><td><code>the configured log file or container JSON logs</code></td><td>line_count / error_count / error_pct / errors - lines matching line_pattern / error_pattern</td><td>counter</td></tr>
+<tr><td><code>logs.&lt;source&gt;.*, docker-logs.&lt;source&gt;.* (per configured log source)</code></td><td><code>the configured log file or container JSON logs</code></td><td>line_count / error_count / error_pct / errors - lines matching line_pattern / error_pattern; with heartbeat_pattern configured: heartbeat_last_seen (unix time of last match, 0 = never), heartbeat_age_seconds (seconds since it, huge when never), heartbeat_status (pre-worded &#x27;not seen yet&#x27; / &#x27;not seen for N seconds&#x27; for templates)</td><td>counter; gauge (heartbeat age)</td></tr>
 <tr><td class="group" colspan="4">Collection</td></tr>
 <tr><td><code>collect.procfs_seconds, collect.proc_pid_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>procfs collection time per tick; proc_pid is the /proc/&lt;pid&gt; scan portion of it</td><td>measured duration</td></tr>
 <tr><td><code>collect.logs_seconds, collect.docker_logs_seconds, collect.oom_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>log scanning time per tick</td><td>measured duration</td></tr>
@@ -337,6 +338,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <li><strong>Disk:</strong> Stacked device-mapper/md devices are deduplicated - I/O is attributed to the backing disk; mapper-level views are not reported.</li>
 <li><strong>Disk:</strong> Rates and percentages are counter diffs over the measured interval; a suspend or counter reset distorts one interval (clamped to 0, not fatal).</li>
 <li><strong>Network:</strong> net.tcp.retrans_ratio_pct is meaningless while TcpOutSegs is near zero; net.tcp.listen_* need /proc/net/netstat, absent in some containers.</li>
+<li><strong>Log sources:</strong> The heartbeat last-seen time is persisted in state.sqlite and survives restarts. An edited heartbeat_pattern starts over (&#x27;not seen yet&#x27;), so a broken pattern surfaces within one interval instead of one threshold. A beat that landed while microsre was down for over ten minutes is missed and can alert once - it self-heals at the next beat.</li>
 <li><strong>Semantics:</strong> Metrics mix three semantics: integrals (CPU time, bytes - a burst smears across the window average), counters (retransmits, OOM kills, error lines - exact count in the window, no intra-window timing), and instantaneous samples (run queue, PSI, gauges - true at tick time; PSI is a kernel-windowed average on top). Size thresholds for the class: a 5-second spike can hide inside a calm 60-second integral, a counter sees the count but not the timing, and an instantaneous sample can miss the spike altogether.</li>
 </ul>
 <!-- metrics:table:end -->
@@ -429,6 +431,19 @@ error_pattern = "\\[error\\]|\\[crit\\]|\\[alert\\]|\\[emerg\\]"</code></pre>
 
 <p>This fires when at least 10 error-level lines appear per check and the total stays above the threshold for 120 seconds, and uses the <code>logs</code> template which includes the recent error lines.</p>
 
+<h3>Heartbeats: alert on absence</h3>
+
+<p>Some jobs only need to prove they ran. Set <code>heartbeat_pattern</code> to the line a healthy source logs regularly, and microSRE reports <code>logs.&lt;name&gt;.heartbeat_last_seen</code> (unix time of the last match, 0 = never), <code>logs.&lt;name&gt;.heartbeat_age_seconds</code> (seconds since it), and <code>logs.&lt;name&gt;.heartbeat_status</code> (a pre-worded "not seen yet" / "not seen for N seconds" for templates):</p>
+
+<pre><code>[[logs]]
+name = "nightly-batch"
+path = "/var/log/nightly-batch.log"
+heartbeat_pattern = "batch (done|finished)"</code></pre>
+
+<pre><code>"logs.nightly-batch.heartbeat_age_seconds" = { max = 87000, duration = 0, template = "heartbeat" }</code></pre>
+
+<p>This fires when nothing matched the pattern for 24 hours plus 20 minutes of drift. Until the first match the age is huge, so a job that never runs at all alerts right away. The last-seen time is persisted in <code>state.sqlite</code> and survives restarts; an edited <code>heartbeat_pattern</code> starts over, so a typo alerts within one interval instead of up to a day later. A beat that arrived during a downtime longer than ten minutes is missed and may alert once - it self-heals at the next beat. It works for <code>[[docker-logs]]</code> sources as well.</p>
+
 <h3>Docker logs</h3>
 
 <pre><code>[[docker-logs]]
@@ -436,7 +451,7 @@ error_pattern = "\\[error\\]|\\[crit\\]|\\[alert\\]|\\[emerg\\]"</code></pre>
 line_pattern = "^\\d{4}-\\d{2}-\\d{2}"   # e.g. lines starting with a timestamp
 error_pattern = ".(ERROR|CRITICAL|FATAL)."</code></pre>
 
-<p>As root, microSRE reads the container JSON logs under <code>/var/lib/docker/containers</code> directly and keeps file offsets - cheap. As a regular user it falls back to <code>docker logs --since</code> on every check, which becomes slow and IO-intensive unless log rotation is set up. Docker Compose replica suffixes (<code>-1</code>, <code>_1</code>) are stripped, so <code>containers</code> lists service names. Metrics are reported per container as <code>docker-logs.&lt;name&gt;.*</code>.</p>
+<p>As root, microSRE reads the container JSON logs under <code>/var/lib/docker/containers</code> directly and keeps file offsets - cheap. As a regular user it falls back to <code>docker logs --since</code> on every check, which becomes slow and IO-intensive unless log rotation is set up. Docker Compose replica suffixes (<code>-1</code>, <code>_1</code>) are stripped, so <code>containers</code> lists service names. Metrics are reported per container as <code>docker-logs.&lt;name&gt;.*</code>. A stopped or removed container keeps reporting a tick with zero lines, so heartbeat ages keep growing and the dead man's switch still fires. In this direct-file mode, read positions are kept in <code>state.sqlite</code>: a restart within ten minutes of downtime picks up where it left off (heartbeat sources catch up on what they missed; other sources resume at the end of the log).</p>
 
 <h3>Multiple log sources</h3>
 
@@ -450,7 +465,7 @@ error_pattern = ".(ERROR|CRITICAL|FATAL)."</code></pre>
 
 <h2 id="alerting">Alerting</h2>
 
-<p>Alerts go to a single <code>webhook_url</code>; the chat service is detected from the URL. Omit the key to run without alerts.</p>
+<p>Alerts go straight from your machine to a single <code>webhook_url</code> - Slack, Discord, Telegram, or any endpoint that accepts a JSON POST. The hosted service is not involved in delivery. Omit the key to run without chat alerts; alert lines still land in the system log.</p>
 
 <pre><code># Slack
 webhook_url = "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXX"
@@ -528,7 +543,7 @@ chat_id = "-1001234567890"</code></pre>
 
 <pre><code>journalctl -u microsre -n 50 --no-pager</code></pre>
 
-<p>Common causes: invalid TOML syntax, a <code>webhook_url</code> that is not a Slack, Discord, or Telegram URL, a bad regex in a log pattern, or missing read permissions on log files. The config file itself is created automatically on first run - check the path printed by <code>microsre --version</code>.</p>
+<p>Common causes: invalid TOML syntax, a bad regex in a log pattern, a missing Telegram <code>chat_id</code>, or missing read permissions on log files. The config file itself is created automatically on first run - check the path printed by <code>microsre --version</code>.</p>
 
 <hr>
 

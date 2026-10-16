@@ -1,0 +1,122 @@
+# microsre.io configuration file
+
+# Report to microsre.io SaaS
+# ingest_url="https://eu.microsre.io/ingest?token=<your tokan>"
+
+# Expose metrics for Prometheus scraping
+# prometheus_listen = "127.0.0.1:9100"
+
+# Seconds between checks in daemon mode
+interval = 60
+
+# No webhook_url - no alerts
+# webhook_url = "https://hooks.slack.com/services/..."
+# or: webhook_url = "https://discord.com/api/webhooks/..."
+# or: webhook_url = "https://api.telegram.org/bot<token>/sendMessage"
+# username = "microsrebot"
+# chat_id = "-1001234567890"  # Telegram only
+
+[alerts]
+"mem.utilization_pct"                   = { max = 90, duration = 0,   recovery_margin = 0.95, template = "metric"}
+"mem.pressure.some.avg10"               = { max = 10, duration = 0,   recovery_margin = 0.95, template = "metric"}
+"mem.pressure.full.avg10"               = { max = 5,  duration = 0,   recovery_margin = 0.95, template = "metric"}
+
+"cpu.utilization_pct"                   = { max = 80, duration = 0,   recovery_margin = 0.95, template = "metric"}
+"cpu.max_utilization_pct"               = { max = 90, duration = 120, recovery_margin = 0.95, template = "metric"}
+"cpu.pressure.some.avg10"               = { max = 20, duration = 120, recovery_margin = 0.95, template = "metric"}
+"cpu.pressure.full.avg10"               = { max = 1,  duration = 120, recovery_margin = 0.95, template = "metric"}
+
+"disk.space_usage_pct"                  = { max = 90, duration = 0,   recovery_margin = 0.95, template = "metric"}
+"disk.max.utilization_pct"              = { max = 40, duration = 120, recovery_margin = 0.95, template = "metric"}
+"disk.pressure.some.avg10"              = { max = 10, duration = 120, recovery_margin = 0.95, template = "metric"}
+"disk.pressure.full.avg10"              = { max = 10, duration = 120, recovery_margin = 0.95, template = "metric"}
+
+"net.total.errs_per_sec"                = { max = 10, duration = 120, recovery_margin = 0.95, template = "metric"}
+"net.total.drop_per_sec"                = { max = 10, duration = 120, recovery_margin = 0.95, template = "metric"}
+"net.max.utilization_pct"               = { max = 80, duration = 120, recovery_margin = 0.95, template = "metric"}
+"net.tcp.listen_overflows"              = { max = 1,  duration = 0,   recovery_margin = 0,    template = "listen"}
+
+"oom.count"                             = { max = 1,  duration = 0,   recovery_margin = 0,    template = "oom"}
+
+"logs.nginx.error_count"                = { max = 10, duration = 120, recovery_margin = 0.95, template = "logs"}
+"logs.apache.error_count"               = { max = 10, duration = 120, recovery_margin = 0.95, template = "logs"}
+"logs.app.error_count"                  = { max = 1,  duration = 120, recovery_margin = 0,    template = "logs"}
+# "docker-logs.celery-worker.error_pct"   = { max = 10, duration = 0,   recovery_margin = 0.95, template = "logs"}
+ 
+[[logs]]
+name = "nginx"
+path = "/var/log/nginx/error.log"
+
+[[logs]]
+name = "apache"
+path = "/var/log/apache2/error.log"
+
+[[logs]]
+name = "apache"
+path = "/var/log/httpd/error_log"
+error_pattern = "[.*:error]"
+
+[[logs]]
+name = "app"
+path = "/app/logs/django.log"
+line_pattern = "^\\d{4}-\\d{2}-\\d{2}"   # starts with timestamp
+error_pattern = ".(ERROR|CRITICAL|FATAL)."
+
+# Docker logs as non-root are slow and IO-intensive by default
+# unless log rotation is set up or low volume
+#[[docker-logs]]
+# all containers by default
+# containers = ["django-app", "celery-worker"]
+#line_pattern = "^\\d{4}-\\d{2}-\\d{2}"   # starts with timestamp
+#error_pattern = ".(ERROR|CRITICAL|FATAL)."
+
+[[templates]]
+name = "oom"
+title = "🔥 {oom.count} OOM kill(s) on {hostname}"
+body = """*{timestamp}*
+
+{oom.count} process(es) killed by OOM killer:
+
+{oom.victims}
+
+Memory pressure last recorded and now:
+- some: {mem.pressure.some.avg10.previous}% -> {mem.pressure.some.avg10}%
+- full: {mem.pressure.full.avg10.previous}% -> {mem.pressure.full.avg10}%
+
+Check what is eating memory: `ps aux --sort=-rss | head`, `cat /proc/pressure/memory`
+"""
+
+[[templates]]
+name = "logs"
+title = "⚠️ {scope.name} error spike on {hostname}"
+body = """*{timestamp}*
+
+{scope.error_count} errors, {scope.error_pct}%
+
+*Recent errors:*
+{scope.errors}
+
+Keep watching: `tail -f` the log file or `journalctl -f`
+"""
+
+[[templates]]
+name = "listen"
+title = "🔌 Listen backlog overflow on {hostname}"
+body = """*{timestamp}*
+
+{net.tcp.listen_overflows} listen overflow(s), {net.tcp.listen_drops} dropped connection(s) during the last check.
+
+Check the backlog: `ss -lnt` (Send-Q vs Recv-Q), `nstat | grep -i listen`
+"""
+
+[[templates]]
+name = "metric"
+title = "📊 {metric.name} alert on {hostname}"
+body = """*{timestamp}*
+
+**{metric.name}**: {metric.value}
+**Threshold**:     {metric.min} {metric.max}
+**Duration**:      {metric.duration} seconds
+
+Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, swap), `cat /proc/pressure/*`
+"""

@@ -1,0 +1,22 @@
+[project]
+name = "microsre"
+version = "2026.10.9"
+description = "Linux health checks at your cadence - no Prometheus, Grafana, or metrics agent."
+readme = "README.txt"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Aivars Kalvans", email = "aivars.kalvans@gmail.com" }]
+
+[project.scripts]
+microsre = "microsre.cli:main"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+warn_unused_ignores = true
+show_error_codes = true
+check_untyped_defs = true
+
+[tool.ruff]
+line-length = 120
