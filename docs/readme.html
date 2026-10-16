@@ -259,7 +259,9 @@ name = "metric"
 title = "📊 {metric.name} alert on {hostname}"
 body = """**{metric.name}**: {metric.value}
 **Threshold**: {metric.min} {metric.max}
-**Duration**: {metric.duration} seconds"""</code></pre>
+**Duration**: {metric.duration} seconds
+
+Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, swap), `cat /proc/pressure/*`"""</code></pre>
 
 <h3>Top-level keys</h3>
 
@@ -299,6 +301,7 @@ body = """**{metric.name}**: {metric.value}
 <tr><td><code>cpu.utilization_pct, cpu.iowait_pct, cpu.steal_pct</code></td><td><code>/proc/stat</code></td><td>cpu line - user, nice, system, idle, iowait, irq, softirq, steal ticks, diffed over the interval</td></tr>
 <tr><td><code>cpu.max_utilization_pct, cpu.max_utilization_core, cpu.utilization_per_core</code></td><td><code>/proc/stat</code></td><td>cpuN per-core lines</td></tr>
 <tr><td><code>cpu.loadavg.1min (+ .previous)</code></td><td><code>/proc/loadavg</code></td><td>1 min field</td></tr>
+<tr><td><code>cpu.run_queue, cpu.run_queue_per_cpu</code></td><td><code>/proc/stat</code></td><td>procs_running, max of 5 samples 50ms apart; per_cpu is a pct of cpu.count</td></tr>
 <tr><td><code>cpu.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/cpu</code></td><td>some / full line, avg10 / avg60</td></tr>
 <tr><td class="group" colspan="3">Disk</td></tr>
 <tr><td><code>disk.space_usage_pct</code></td><td><code>/proc/self/mountinfo</code></td><td>per-mount statvfs bytes used / total; each device counted once</td></tr>
@@ -319,7 +322,21 @@ body = """**{metric.name}**: {metric.value}
 <tr><td><code>oom.count, oom.victims</code></td><td><code>kernel log (auto-detected, no config)</code></td><td>OOM killer events</td></tr>
 <tr><td class="group" colspan="3">Log sources</td></tr>
 <tr><td><code>logs.&lt;source&gt;.*, docker-logs.&lt;source&gt;.* (per configured log source)</code></td><td><code>the configured log file or container JSON logs</code></td><td>line_count / error_count / error_pct / errors - lines matching line_pattern / error_pattern</td></tr>
+<tr><td class="group" colspan="3">Collection</td></tr>
+<tr><td><code>collect.procfs_seconds, collect.proc_pid_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>procfs collection time per tick; proc_pid is the /proc/&lt;pid&gt; scan portion of it</td></tr>
+<tr><td><code>collect.logs_seconds, collect.docker_logs_seconds, collect.oom_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>log collection time per tick</td></tr>
 </table>
+
+<h4>Caveats</h4>
+<ul>
+<li><strong>CPU:</strong> cpu.utilization_pct aggregates all cores - one hot core on a many-core host is hidden. Watch cpu.max_utilization_pct and cpu.utilization_per_core.</li>
+<li><strong>CPU:</strong> cpu.run_queue is a burst sample (max of 5 reads 50ms apart), not a continuous measurement; sub-50ms spikes can slip through.</li>
+<li><strong>Memory:</strong> MemAvailable is a kernel heuristic about reclaimable memory, not a measurement of what applications can actually allocate.</li>
+<li><strong>Pressure:</strong> PSI avg10 is a windowed average of a windowed signal - it lags real stalls and smooths over short bursts (avg60 more so).</li>
+<li><strong>Disk:</strong> Stacked device-mapper/md devices are deduplicated - I/O is attributed to the backing disk; mapper-level views are not reported.</li>
+<li><strong>Disk:</strong> Rates and percentages are counter diffs over the measured interval; a suspend or counter reset distorts one interval (clamped to 0, not fatal).</li>
+<li><strong>Network:</strong> net.tcp.retrans_ratio_pct is meaningless while TcpOutSegs is near zero; net.tcp.listen_* need /proc/net/netstat, absent in some containers.</li>
+</ul>
 <!-- metrics:table:end -->
 
 <p><code>hostname</code>, <code>timestamp</code>, and <code>uptime</code> (from <code>/proc/uptime</code>) are also available - mostly useful in templates.</p>

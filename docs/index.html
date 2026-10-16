@@ -115,26 +115,27 @@
     <div class="container">
       <h2>How it works</h2>
       <p>microSRE reads <code>/proc</code> directly - the same kernel interface that <code>ps</code>, <code>top</code>, and <code>iostat</code> use, but without the fragile parsing and version drift. It samples CPU, memory, disk I/O, and network counters, then diffs them to produce rates.</p>
-      <p>It also watches application logs you specify, matching each line against error patterns. When error volume crosses your threshold in a time window, it alerts. No SDK to install, no code to instrument, no vendor to depend on.</p>
-      <p>Alerts go to Slack, Discord, or Telegram. No dashboards. No data-source sprawl. No lock-in. Your metrics, your logs, your machine.</p>
+      <p><strong>What "needs you" means:</strong> for every resource - CPU, memory, disk, network - microSRE reports <em>utilization</em>, <em>saturation</em>, and <em>errors</em>, the USE-method taxonomy, from whatever the kernel exposes. CPU: utilization and run queue. Memory: utilization, pressure-stall averages, and OOM kills. Disk: utilization, await, and queue depth. Network: throughput, TCP retransmits, and listen-backlog overflows. Thresholds are yours to set; the signals are the kernel's.</p>
+      <p>It also watches application logs you specify, matching each line against error patterns. When error volume crosses your threshold in a time window, it alerts. No SDK to install, no code to instrument, no vendor to depend on. And it measures itself: every tick reports how long its own collection took (<code>collect.*_seconds</code>), so its cost is checkable on your machine, not promised in a README.</p>
+      <p>Alerts go to Slack, Discord, or Telegram. That channel is the record. No dashboards. No data-source sprawl. No lock-in. Your metrics, your logs, your machine.</p>
       <div class="alert alert-secondary mt-3" role="alert">
-        <strong>No root required.</strong> Runs as a regular user out of the box. Root unlocks per-process network details and a few extra signals - useful, but not required.
+        <strong>No root required.</strong> Runs as a regular user out of the box. Root (or the docker group) adds container log collection, and system journal access widens OOM-kill detection - useful, not required.
       </div>
       <div class="row mt-4">
         <div class="col-md-3 text-center">
           <div class="feature-icon">📊</div>
           <h5>CPU & memory</h5>
-          <p class="text-muted small">/proc/stat, /proc/meminfo, /proc/pressure</p>
+          <p class="text-muted small">/proc/stat, /proc/meminfo, /proc/pressure (some + full averages)</p>
         </div>
         <div class="col-md-3 text-center">
           <div class="feature-icon">💾</div>
           <h5>Disk I/O</h5>
-          <p class="text-muted small">/proc/diskstats, space via statvfs</p>
+          <p class="text-muted small">/proc/diskstats - utilization, await, queue depth; space via statvfs</p>
         </div>
         <div class="col-md-3 text-center">
           <div class="feature-icon">🌐</div>
           <h5>Network</h5>
-          <p class="text-muted small">/proc/net/dev, connection tracking</p>
+          <p class="text-muted small">/proc/net/dev, /proc/net/snmp, /proc/net/netstat - throughput, retransmits, listen overflows</p>
         </div>
         <div class="col-md-3 text-center">
           <div class="feature-icon">📜</div>
@@ -142,26 +143,40 @@
           <p class="text-muted small">Pattern match, rate threshold, alert</p>
         </div>
       </div>
+
+      <h3 class="mt-5">What an alert looks like</h3>
+      <p>This is the shipped default template, rendered with example values - every alert carries the command that tells you what to check next:</p>
+      <pre>🔌 Listen backlog overflow on web-01
+
+*2026-10-16 09:14:03*
+
+14 listen overflow(s), 3 dropped connection(s) during the last check.
+
+Check the backlog: `ss -lnt` (Send-Q vs Recv-Q), `nstat | grep -i listen`</pre>
     </div>
   </section>
 
   <section class="section bg-light" id="why">
     <div class="container">
       <h2>Why /proc directly</h2>
-      <p>Standard tools are built for human eyes, not automation. Their output formats change between distributions, container environments break their assumptions, and combining multiple tools buries signal in noise.</p>
+      <p>Standard tools are built for human eyes, not automation. Each one re-scans the same kernel counters, reformats them for a terminal, and truncates whatever didn't fit a readable column. Reading <code>/proc</code> directly means one scan instead of many, trivial parsing instead of format-string archaeology, and the full field - nothing lost in translation to a human-friendly layout.</p>
       <p>Reading /proc directly gives you:</p>
       <ul>
         <li><strong>Stability</strong> - kernel ABI, not userland format strings</li>
         <li><strong>Speed</strong> - no fork/exec, no parsing overhead</li>
         <li><strong>Portability</strong> - works in minimal containers, rescue shells, locked-down hosts</li>
         <li><strong>Completeness</strong> - access fields that <code>ps</code> and <code>top</code> hide or misrepresent</li>
-        <li><strong>Early warning</strong> - stay ahead of the OOM killer by monitoring <code>/proc/pressure/mem</code>, the same kernel triggers systemd uses to decide when processes die</li>
+        <li><strong>Early warning</strong> - stay ahead of the OOM killer by monitoring <code>/proc/pressure/memory</code>, the same pressure signal systemd-oomd watches when it decides which process to kill</li>
       </ul>
+      <p>To be fair, /proc drifts too: fields appear and change meaning across kernel versions - PSI itself only landed in 4.20, and some counters mean different things on different filesystems. So every signal microSRE reports is traced to the exact file and field it comes from, in the <a href="readme.html#metrics">documentation</a>. No counter is named on faith.</p>
       <h2>Why logs directly</h2>
       <p>Log scanning extends the same philosophy: observe applications from the outside, without modifying them. Your logs already contain the errors; you just have to alert on them. No code changes - just patterns and thresholds. Your logs, your choice: keep them local, archive them, or ship them to centralized storage. microSRE alerts you when bad things happen; the rest is up to you. No SDK to break, no network dependency to fail, no vendor to disappear.</p>
       <div class="quote-box mt-4">
         <p class="mb-0">It's the observer that can't be blinded by the observed.</p>
       </div>
+      <h2 class="mt-5">No hoarding</h2>
+      <p>Most monitoring agents run a hoard-first pipeline: buffer every metric and every log line "just in case", then forward all of it to a remote store. microSRE does the opposite - it reads the source in place, acts on it, and keeps nothing beyond the current check. What to keep and for how long - logs local, archived, shipped, or sampled away - is your decision, not the agent's. (Traces are a different story: they answer questions metrics and logs structurally cannot, and shipping those is a reasonable choice. It is the ship-everything-by-default culture around metrics and logs we opt out of.)</p>
+      <p>Notifications get the same treatment. On-call tools keep their own log of every page, acknowledgment, and escalation - a second incident history, stored inside the vendor's system. For a large org that audit trail earns its keep. But the alert already landed in your chat, the discussion happened there, and that history is searchable, backed up, and yours. Replaying last night's pages should not require logging into another tool. Where a formal trail is genuinely needed, it should be an explicit opt-in - like shipping logs or adding dashboards - not a side effect of being paged.</p>
     </div>
   </section>
 
@@ -169,7 +184,7 @@
     <div class="container">
       <h2>Across your fleet</h2>
       <p><strong>Built for fleets of pets, not herds of cattle</strong> - the tens of servers you know by name, not thousands you don't.</p>
-      <p>Running a fleet means deciding across machines, not staring at one. The hosted view is your command and control center: the same 60-second health check for every server, every signal in one place - alerts and next actions based on the whole picture, not a single metric in isolation. Like <code>top</code> for your whole infrastructure, not another dashboard builder. With a longer history and advanced alerting rules. Raw metrics and logs stay on your machines; the hosted view receives only 60-second health summaries and alert state.</p>
+      <p>Running a fleet means deciding across machines, not staring at one. The hosted view is your command and control center: the same 60-second health check for every server, every signal in one place - alerts and next actions based on the whole picture, not a single metric in isolation. A ward monitor for your infrastructure - every server's vitals at a glance, anomalies raised - not another dashboard builder. With a longer history and advanced alerting rules. Logs never leave your machines, and no continuous metric stream does either; the hosted view receives only the periodic health summary and alert state.</p>
 
       <p><strong>Private beta includes:</strong></p>
 
