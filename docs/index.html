@@ -166,7 +166,7 @@ Check the backlog: `ss -lnt` (Send-Q vs Recv-Q), `nstat | grep -i listen`</pre>
         <li><strong>Speed</strong> - no fork/exec, no parsing overhead</li>
         <li><strong>Portability</strong> - works in minimal containers, rescue shells, locked-down hosts</li>
         <li><strong>Completeness</strong> - access fields that <code>ps</code> and <code>top</code> hide or misrepresent</li>
-        <li><strong>Early warning</strong> - stay ahead of the OOM killer by monitoring <code>/proc/pressure/memory</code>, the same pressure signal systemd-oomd watches when it decides which process to kill</li>
+        <li><strong>Early warning</strong> - stay ahead of the OOM killer by monitoring <code>/proc/pressure/memory</code>, the same pressure signal systemd-oomd watches when it decides which cgroup to kill</li>
       </ul>
       <p>To be fair, /proc drifts too: fields appear and change meaning across kernel versions - PSI itself only landed in 4.20, and some counters mean different things on different filesystems. So every signal microSRE reports is traced to the exact file and field it comes from, in the <a href="readme.html#metrics">documentation</a>. No counter is named on faith.</p>
       <h2>Why logs directly</h2>
