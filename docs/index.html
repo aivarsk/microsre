@@ -180,6 +180,13 @@ Check the backlog: `ss -lnt` (Send-Q vs Recv-Q), `nstat | grep -i listen`</pre>
     </div>
   </section>
 
+  <section class="section" id="prometheus">
+    <div class="container">
+      <h2>Prometheus-compatible, pipeline-free</h2>
+      <p>Set <code>prometheus_listen</code> and the daemon serves every metric it checks at <code>/metrics</code> in Prometheus text exposition format - off by default, nothing listens until you ask. Each metric carries a comment naming the exact /proc file and field it came from. Point your own Prometheus (or anything that scrapes) at it - keep history, draw graphs, wire your own alerts - or just <code>curl</code> the endpoint and read the values: a text format you can see in a terminal is a format you can debug, and an observability tool that hides its own output is not very observable. We adopted the format, not the pipeline: no agent, no remote-write, no background shipper. Here are the metrics - everything downstream is your choice.</p>
+    </div>
+  </section>
+
   <section class="section" id="saas">
     <div class="container">
       <h2>Across your fleet</h2>
