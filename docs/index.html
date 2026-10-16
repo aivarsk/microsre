@@ -119,7 +119,7 @@
       <p>It also watches application logs you specify, matching each line against error patterns. When error volume crosses your threshold in a time window, it alerts. No SDK to install, no code to instrument, no vendor to depend on. And it measures itself: every tick reports how long its own collection took (<code>collect.*_seconds</code>), so its cost is checkable on your machine, not promised in a README.</p>
       <p>Alerts go to Slack, Discord, or Telegram. That channel is the record. No dashboards. No data-source sprawl. No lock-in. Your metrics, your logs, your machine.</p>
       <div class="alert alert-secondary mt-3" role="alert">
-        <strong>No root required.</strong> Runs as a regular user out of the box. Root (or the docker group) adds container log collection, and system journal access widens OOM-kill detection - useful, not required.
+        <strong>No root required.</strong> Runs as a regular user out of the box - every /proc signal, your log files, and OOM-kill detection via the system journal. Root (or the docker group) adds container log scanning - useful, not required.
       </div>
       <div class="row mt-4">
         <div class="col-md-3 text-center">

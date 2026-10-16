@@ -324,7 +324,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr><td><code>logs.&lt;source&gt;.*, docker-logs.&lt;source&gt;.* (per configured log source)</code></td><td><code>the configured log file or container JSON logs</code></td><td>line_count / error_count / error_pct / errors - lines matching line_pattern / error_pattern</td></tr>
 <tr><td class="group" colspan="3">Collection</td></tr>
 <tr><td><code>collect.procfs_seconds, collect.proc_pid_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>procfs collection time per tick; proc_pid is the /proc/&lt;pid&gt; scan portion of it</td></tr>
-<tr><td><code>collect.logs_seconds, collect.docker_logs_seconds, collect.oom_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>log collection time per tick</td></tr>
+<tr><td><code>collect.logs_seconds, collect.docker_logs_seconds, collect.oom_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>log scanning time per tick</td></tr>
 </table>
 
 <h4>Caveats</h4>
