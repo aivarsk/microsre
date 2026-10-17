@@ -1,6 +1,6 @@
 [project]
 name = "microsre"
-version = "2026.10.9"
+version = "2026.10.10"
 description = "Linux health checks at your cadence - no Prometheus, Grafana, or metrics agent."
 readme = "README.txt"
 requires-python = ">=3.11"
