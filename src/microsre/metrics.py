@@ -17,18 +17,9 @@ def _calculate_metrics_cpu(metrics, start, end, interval):
         if k.startswith("cpu") and k in start["proc.stat"]:
             o = start["proc.stat"][k]
             akeys = ("user", "nice", "system", "irq", "softirq", "steal")
-            active = sum(v[i] for i in akeys) - sum(o[i] for i in akeys)
-            tkeys = (
-                "user",
-                "nice",
-                "system",
-                "irq",
-                "softirq",
-                "steal",
-                "idle",
-                "iowait",
-            )
-            total = sum(v[i] for i in tkeys) - sum(o[i] for i in tkeys)
+            active = sum(_delta(v[i], o[i]) for i in akeys)
+            tkeys = akeys + ("idle", "iowait")
+            total = sum(_delta(v[i], o[i]) for i in tkeys)
             try:
                 utilization = int(active * 100 / total)
             except ZeroDivisionError:
@@ -171,19 +162,13 @@ def _calculate_metrics_disk(metrics, start, end, interval):
             continue
         o = start["proc.diskstats"][k]
         metrics["disk.list"].append(k)
-        metrics[f"disk.{k}.read_bytes_per_sec"] = (
-            _delta(n["sectors_read"], o["sectors_read"]) * n["sector_size"] / interval
-        )
-        metrics[f"disk.{k}.write_bytes_per_sec"] = (
-            _delta(n["sectors_written"], o["sectors_written"]) * n["sector_size"] / interval
-        )
+        metrics[f"disk.{k}.read_bytes_per_sec"] = _delta(n["sectors_read"], o["sectors_read"]) * 512 / interval
+        metrics[f"disk.{k}.write_bytes_per_sec"] = _delta(n["sectors_written"], o["sectors_written"]) * 512 / interval
         metrics[f"disk.{k}.read_iops"] = _delta(n["reads"], o["reads"]) / interval
         metrics[f"disk.{k}.write_iops"] = _delta(n["writes"], o["writes"]) / interval
 
-        metrics["disk.total.read_bytes_per_sec"] += _delta(n["sectors_read"], o["sectors_read"]) * n["sector_size"]
-        metrics["disk.total.write_bytes_per_sec"] += (
-            _delta(n["sectors_written"], o["sectors_written"]) * n["sector_size"]
-        )
+        metrics["disk.total.read_bytes_per_sec"] += _delta(n["sectors_read"], o["sectors_read"]) * 512
+        metrics["disk.total.write_bytes_per_sec"] += _delta(n["sectors_written"], o["sectors_written"]) * 512
         metrics["disk.total.read_iops"] += _delta(n["reads"], o["reads"])
         metrics["disk.total.write_iops"] += _delta(n["writes"], o["writes"])
 
@@ -274,7 +259,7 @@ def calculate_metrics(start, end, interval):
 
     metrics["oom.count"] = len(metrics["oom"])
     metrics["oom.victims"] = "\n".join(
-        [f"PID={oom['pid']} {oom['comm']} RSS={oom.get('rss')}" for oom in metrics["oom"]]
+        [f"PID={oom['pid']} {oom['comm']} RSS={oom.get('rss', 0) // 1048576}MiB" for oom in metrics["oom"]]
     )
 
     for logs in ("logs", "docker-logs"):

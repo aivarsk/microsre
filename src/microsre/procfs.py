@@ -144,7 +144,7 @@ def _read_proc_pid():
             proc["num_threads"] = int(fields[17])
             proc["starttime"] = int(fields[19])
             proc["vsize"] = int(fields[20])
-            proc["rss"] = int(fields[21])
+            proc["rss"] = int(fields[21]) * os.sysconf("SC_PAGE_SIZE")
             proc["processor"] = int(fields[36])
             proc["delayacct_blkio_ticks"] = int(fields[39])
 
@@ -258,12 +258,6 @@ def _read_stat():
             yield name.decode(), int(field)
 
 
-def _sector_size(device_name):
-    with contextlib.suppress(OSError, ValueError):
-        return int(_read_bytes(f"/sys/block/{device_name}/queue/logical_block_size"))
-    return 512
-
-
 def _is_stacked(slaves, devices):
     # device-mapper/md report the same I/O as their backing disks; partition names
     # resolve to the base disk (sda2 -> sda, nvme0n1p1 -> nvme0n1)
@@ -290,7 +284,6 @@ def _read_diskstats():
         yield (
             name,
             {
-                "sector_size": _sector_size(name),
                 "reads": int(fields[0]),
                 "sectors_read": int(fields[2]),
                 "time_reading": int(fields[3]),
@@ -315,7 +308,7 @@ def _read_net_dev():
         speed = None
         with contextlib.suppress(OSError, ValueError):
             speed = int(_read_bytes(f"/sys/class/net/{iface}/speed").strip())
-            if speed == -1:
+            if speed <= 0 or speed == 65535:
                 speed = None
 
         yield (

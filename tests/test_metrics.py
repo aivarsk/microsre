@@ -56,7 +56,6 @@ def snapshot(**overrides):
 
 def diskstats(**kw):
     fields = {
-        "sector_size": 512,
         "reads": 0,
         "sectors_read": 0,
         "time_reading": 0,
@@ -115,6 +114,22 @@ class TestRetransmit(unittest.TestCase):
         end = snapshot(**{"proc.net.snmp": {"TcpOutSegs": 0, "TcpRetransSegs": 4}})
         metrics = calculate_metrics(start, end, INTERVAL)
         self.assertEqual(metrics["net.tcp.retrans_ratio_pct"], 0)
+
+
+class TestCpuCounters(unittest.TestCase):
+    def test_utilization_is_sum_of_per_field_deltas(self):
+        start = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (100, 0, 100, 700, 0, 0, 0, 0)))}})
+        end = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (200, 0, 200, 900, 0, 0, 0, 0)))}})
+        metrics = calculate_metrics(start, end, INTERVAL)
+        self.assertEqual(metrics["cpu.utilization_pct"], 50)
+
+    def test_regressed_field_counts_as_zero_not_negative(self):
+        # A kernel race can make one counter move backwards; that field contributes
+        # 0 to the interval instead of poisoning the whole sum.
+        start = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (100, 0, 100, 700, 0, 0, 0, 0)))}})
+        end = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (150, 0, 50, 900, 0, 0, 0, 0)))}})
+        metrics = calculate_metrics(start, end, INTERVAL)
+        self.assertEqual(metrics["cpu.utilization_pct"], 20)
 
 
 class TestDiskCounters(unittest.TestCase):

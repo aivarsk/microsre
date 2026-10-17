@@ -307,7 +307,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr><td class="group" colspan="4">Disk</td></tr>
 <tr><td><code>disk.space_usage_pct</code></td><td><code>/proc/self/mountinfo</code></td><td>per-mount statvfs bytes used / total; each device counted once</td><td>instantaneous</td></tr>
 <tr><td><code>disk.max.utilization_pct, disk.max.await_ms, disk.max.queue_depth, disk.max.device</code></td><td><code>/proc/diskstats</code></td><td>per device: time_in_progress diff; await = (time_reading + time_writing) / (reads + writes); queue depth = in_progress gauge; stacked dm/md deduplicated to the backing disk</td><td>integral; instantaneous (queue depth)</td></tr>
-<tr><td><code>disk.total.{read,write}_bytes_per_sec</code></td><td><code>/proc/diskstats</code></td><td>sectors_read / sectors_written x sector size</td><td>integral</td></tr>
+<tr><td><code>disk.total.{read,write}_bytes_per_sec</code></td><td><code>/proc/diskstats</code></td><td>sectors_read / sectors_written x 512-byte sectors (standard kernel units)</td><td>integral</td></tr>
 <tr><td><code>disk.total.{read,write}_iops</code></td><td><code>/proc/diskstats</code></td><td>reads / writes completed</td><td>counter</td></tr>
 <tr><td><code>disk.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/io</code></td><td>some / full line, avg10 / avg60</td><td>instantaneous (kernel-windowed)</td></tr>
 <tr><td><code>disk.&lt;device&gt;.*</code></td><td><code>/proc/diskstats</code></td><td>per-device counters, diffs over the check interval</td><td>integral; instantaneous (queue depth)</td></tr>
@@ -316,7 +316,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr><td><code>net.total.errs_per_sec, net.total.drop_per_sec</code></td><td><code>/proc/net/dev</code></td><td>rx_errs + tx_errs, rx_drop + tx_drop</td><td>counter</td></tr>
 <tr><td><code>net.tcp.retrans_per_sec, net.tcp.retrans_ratio_pct</code></td><td><code>/proc/net/snmp</code></td><td>Tcp: - RetransSegs, OutSegs</td><td>counter</td></tr>
 <tr><td><code>net.tcp.listen_drops, net.tcp.listen_overflows</code></td><td><code>/proc/net/netstat</code></td><td>TcpExt: - ListenDrops, ListenOverflows</td><td>counter</td></tr>
-<tr><td><code>net.max.utilization_pct, net.max.utilization_iface</code></td><td><code>/proc/net/dev + /sys/class/net/&lt;iface&gt;/speed</code></td><td>max of rx/tx bytes x8 as % of link speed</td><td>integral</td></tr>
+<tr><td><code>net.max.utilization_pct, net.max.utilization_iface</code></td><td><code>/proc/net/dev + /sys/class/net/&lt;iface&gt;/speed</code></td><td>max of rx/tx bytes x8 as % of link speed (unknown for virtual or link-down interfaces)</td><td>integral</td></tr>
 <tr><td><code>net.max.{rx,tx}_bytes_per_sec, net.max.{rx,tx}_iface</code></td><td><code>/proc/net/dev</code></td><td>busiest interface by bytes</td><td>integral</td></tr>
 <tr><td><code>net.&lt;iface&gt;.*</code></td><td><code>/proc/net/dev</code></td><td>per-interface counters, diffs over the check interval</td><td>integral; counter (errs, drop)</td></tr>
 <tr><td class="group" colspan="4">OOM kills</td></tr>
