@@ -206,7 +206,7 @@ def calculate_metrics(start, end, interval):
     metrics["uptime"] = end["proc.uptime"]["seconds"]
     metrics["cpu.loadavg.1min"] = end["proc.loadavg"]["1min"]
     metrics["cpu.loadavg.1min.previous"] = start["proc.loadavg"]["1min"]
-    metrics["cpu.run_queue"] = end["proc.stat"].get("procs_running", 0)
+    metrics["cpu.run_queue"] = end["proc.stat"]["procs_running"]
     metrics["cpu.run_queue_per_cpu"] = _pct(metrics["cpu.run_queue"], end["cpu.count"])
 
     # Self-measured collection cost of this tick (nanoseconds in raw, seconds here)
@@ -227,10 +227,8 @@ def calculate_metrics(start, end, interval):
             _delta(end_self["voluntary_ctxt_switches"], start_self["voluntary_ctxt_switches"]) / interval
         )
 
-    metrics["mem.utilization_pct"] = _pct(
-        end["proc.meminfo"]["MemTotal"] - end["proc.meminfo"]["MemAvailable"],
-        end["proc.meminfo"]["MemTotal"],
-    )
+    available = end["proc.meminfo"].get("MemAvailable", end["proc.meminfo"]["MemFree"])
+    metrics["mem.utilization_pct"] = _pct(end["proc.meminfo"]["MemTotal"] - available, end["proc.meminfo"]["MemTotal"])
     # TODO free, buff, etc?
 
     metrics["mem.swap_utilization_pct"] = _pct(

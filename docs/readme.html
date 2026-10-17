@@ -302,7 +302,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr><td><code>cpu.utilization_pct, cpu.iowait_pct, cpu.steal_pct</code></td><td><code>/proc/stat</code></td><td>cpu line - user, nice, system, idle, iowait, irq, softirq, steal ticks, diffed over the interval</td><td>integral</td></tr>
 <tr><td><code>cpu.max_utilization_pct, cpu.max_utilization_core, cpu.utilization_per_core</code></td><td><code>/proc/stat</code></td><td>cpuN per-core lines</td><td>integral</td></tr>
 <tr><td><code>cpu.loadavg.1min (+ .previous)</code></td><td><code>/proc/loadavg</code></td><td>1 min field</td><td>instantaneous (kernel-decayed)</td></tr>
-<tr><td><code>cpu.run_queue, cpu.run_queue_per_cpu</code></td><td><code>/proc/stat</code></td><td>procs_running, max of 5 samples 50ms apart; per_cpu is a pct of cpu.count</td><td>instantaneous (burst max of 5)</td></tr>
+<tr><td><code>cpu.run_queue, cpu.run_queue_per_cpu</code></td><td><code>/proc/loadavg</code></td><td>runnable field (self excluded), max of 5 samples 50ms apart; per_cpu is a pct of cpu.count</td><td>instantaneous (burst max of 5)</td></tr>
 <tr><td><code>cpu.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/cpu</code></td><td>some / full line, avg10 / avg60</td><td>instantaneous (kernel-windowed)</td></tr>
 <tr><td class="group" colspan="4">Disk</td></tr>
 <tr><td><code>disk.space_usage_pct</code></td><td><code>/proc/self/mountinfo</code></td><td>per-mount statvfs bytes used / total; each device counted once</td><td>instantaneous</td></tr>
@@ -339,6 +339,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <li><strong>Disk:</strong> Rates and percentages are counter diffs over the measured interval; a suspend or counter reset distorts one interval (clamped to 0, not fatal).</li>
 <li><strong>Network:</strong> net.tcp.retrans_ratio_pct is meaningless while TcpOutSegs is near zero; net.tcp.listen_* need /proc/net/netstat, absent in some containers.</li>
 <li><strong>Log sources:</strong> The heartbeat last-seen time is persisted in state.sqlite and survives restarts. An edited heartbeat_pattern starts over (&#x27;not seen yet&#x27;), so a broken pattern surfaces within one interval instead of one threshold. A beat that landed while microsre was down for over ten minutes is missed and can alert once - it self-heals at the next beat.</li>
+<li><strong>CPU:</strong> Guest CPU time is included in cpu.utilization_pct: it sits inside the /proc/stat user field, only 8 fields are read, so nothing double-counts. iostat reports the same way; mpstat subtracts guest for its %usr column.</li>
 <li><strong>Semantics:</strong> Metrics mix three semantics: integrals (CPU time, bytes - a burst smears across the window average), counters (retransmits, OOM kills, error lines - exact count in the window, no intra-window timing), and instantaneous samples (run queue, PSI, gauges - true at tick time; PSI is a kernel-windowed average on top). Size thresholds for the class: a 5-second spike can hide inside a calm 60-second integral, a counter sees the count but not the timing, and an instantaneous sample can miss the spike altogether.</li>
 </ul>
 <!-- metrics:table:end -->

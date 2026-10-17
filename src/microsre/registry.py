@@ -82,8 +82,8 @@ ROWS = (
         "cpu.run_queue, cpu.run_queue_per_cpu",
         ("cpu.run_queue", "cpu.run_queue_per_cpu"),
         (),
-        "/proc/stat",
-        "procs_running, max of 5 samples 50ms apart; per_cpu is a pct of cpu.count",
+        "/proc/loadavg",
+        "runnable field (self excluded), max of 5 samples 50ms apart; per_cpu is a pct of cpu.count",
         True,
         "instantaneous (burst max of 5)",
     ),
@@ -360,6 +360,10 @@ CAVEATS = (
     (
         "Log sources",
         "The heartbeat last-seen time is persisted in state.sqlite and survives restarts. An edited heartbeat_pattern starts over ('not seen yet'), so a broken pattern surfaces within one interval instead of one threshold. A beat that landed while microsre was down for over ten minutes is missed and can alert once - it self-heals at the next beat.",
+    ),
+    (
+        "CPU",
+        "Guest CPU time is included in cpu.utilization_pct: it sits inside the /proc/stat user field, only 8 fields are read, so nothing double-counts. iostat reports the same way; mpstat subtracts guest for its %usr column.",
     ),
     (
         "Semantics",

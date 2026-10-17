@@ -34,7 +34,7 @@ def snapshot(**overrides):
             "SwapTotal": 0,
             "SwapFree": 0,
         },
-        "proc.stat": {"cpu": dict.fromkeys(CPU_FIELDS, 0)},
+        "proc.stat": {"cpu": dict.fromkeys(CPU_FIELDS, 0), "procs_running": 0},
         "proc.net.dev": {},
         "proc.net.snmp": {},
         "proc.net.netstat": {},
@@ -118,16 +118,16 @@ class TestRetransmit(unittest.TestCase):
 
 class TestCpuCounters(unittest.TestCase):
     def test_utilization_is_sum_of_per_field_deltas(self):
-        start = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (100, 0, 100, 700, 0, 0, 0, 0)))}})
-        end = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (200, 0, 200, 900, 0, 0, 0, 0)))}})
+        start = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (100, 0, 100, 700, 0, 0, 0, 0))), "procs_running": 0}})
+        end = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (200, 0, 200, 900, 0, 0, 0, 0))), "procs_running": 0}})
         metrics = calculate_metrics(start, end, INTERVAL)
         self.assertEqual(metrics["cpu.utilization_pct"], 50)
 
     def test_regressed_field_counts_as_zero_not_negative(self):
         # A kernel race can make one counter move backwards; that field contributes
         # 0 to the interval instead of poisoning the whole sum.
-        start = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (100, 0, 100, 700, 0, 0, 0, 0)))}})
-        end = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (150, 0, 50, 900, 0, 0, 0, 0)))}})
+        start = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (100, 0, 100, 700, 0, 0, 0, 0))), "procs_running": 0}})
+        end = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (150, 0, 50, 900, 0, 0, 0, 0))), "procs_running": 0}})
         metrics = calculate_metrics(start, end, INTERVAL)
         self.assertEqual(metrics["cpu.utilization_pct"], 20)
 
@@ -232,6 +232,19 @@ class TestRunQueue(unittest.TestCase):
         metrics = calculate_metrics(snapshot(), end, INTERVAL)
         self.assertEqual(metrics["cpu.run_queue"], 17)
         self.assertEqual(metrics["cpu.run_queue_per_cpu"], 212)
+
+
+class TestMemory(unittest.TestCase):
+    def test_used_is_total_minus_available(self):
+        metrics = calculate_metrics(snapshot(), snapshot(), INTERVAL)
+        self.assertEqual(metrics["mem.utilization_pct"], 50)
+
+    def test_available_falls_back_to_free_on_old_kernels(self):
+        end = snapshot()
+        del end["proc.meminfo"]["MemAvailable"]
+        end["proc.meminfo"]["MemFree"] = 250_000
+        metrics = calculate_metrics(snapshot(), end, INTERVAL)
+        self.assertEqual(metrics["mem.utilization_pct"], 75)
 
 
 class TestCollectionDurations(unittest.TestCase):

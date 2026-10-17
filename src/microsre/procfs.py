@@ -42,7 +42,25 @@ def _read_cpuinfo():
         elif line.startswith(b"model name"):
             model = line.split(b": ")[1]
     yield "proc.cpuinfo.model_name", model.decode()
-    yield "cpu.count", count
+    yield "cpu.count", _online_cpu_count() or count
+
+
+_CPU_DIR = re.compile(r"cpu\d+")
+
+
+def _online_cpu_count():
+    count = 0
+    with contextlib.suppress(OSError):
+        for name in os.listdir("/sys/devices/system/cpu"):
+            if not _CPU_DIR.fullmatch(name):
+                continue
+            online = b"1"
+            with contextlib.suppress(OSError):
+                online = _read_bytes(f"/sys/devices/system/cpu/{name}/online")
+            if online.strip() == b"0":
+                continue
+            count += 1
+    return count
 
 
 _ESCAPED = re.compile(rb"\\([0-7]{3}|\\)")
@@ -232,12 +250,6 @@ def _read_meminfo():
             yield name.decode(), int(value.split()[0]) * 1024
 
 
-def _read_stat_one(name):
-    for line in _read_bytes("/proc/stat").splitlines():
-        if line.startswith(name):
-            return int(line.split(maxsplit=1)[1])
-
-
 def _read_stat():
     for line in _read_bytes("/proc/stat").splitlines():
         name, rest = line.split(maxsplit=1)
@@ -247,21 +259,15 @@ def _read_stat():
                 name.decode(),
                 dict(zip(("user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal"), fields)),
             )
-        elif name in {
-            b"procs_running",
-            b"procs_blocked",
-            b"ctxt",
-            b"intr",
-            b"processes",
-        }:
-            field, *_ = rest.split(maxsplit=1)
-            yield name.decode(), int(field)
+
+
+_PARTITION_SUFFIX = re.compile(r"(p?\d+)$")
 
 
 def _is_stacked(slaves, devices):
     # device-mapper/md report the same I/O as their backing disks; partition names
     # resolve to the base disk (sda2 -> sda, nvme0n1p1 -> nvme0n1)
-    return any(s in devices or re.sub(r"(p?\d+)$", "", s) in devices for s in slaves)
+    return any(s in devices or _PARTITION_SUFFIX.sub("", s) in devices for s in slaves)
 
 
 def _read_diskstats():
@@ -407,19 +413,23 @@ def _read_self():
     }
 
 
+def _loadavg_runnable():
+    # runnable includes this process itself; it is not part of the queue
+    return max(0, int(_read_bytes("/proc/loadavg").split()[3].split(b"/")[0]) - 1)
+
+
 def sample_procfs():
     samples = {"procs_running": 0}
 
     def burst():
         for _ in range(4):
             time.sleep(0.05)
-            value = _read_stat_one(b"procs_running")
+            value = _loadavg_runnable()
             if value > samples["procs_running"]:
                 samples["procs_running"] = value
 
     def merge(raw):
-        stat = raw["proc.stat"]
-        stat["procs_running"] = max(stat["procs_running"], samples["procs_running"])
+        raw["proc.stat"]["procs_running"] = max(_loadavg_runnable(), samples["procs_running"])
 
     return merge, worker.submit(burst)
 
