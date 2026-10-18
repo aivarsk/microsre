@@ -1,5 +1,6 @@
 import socket
 
+from microsre.metrics import names
 from microsre.registry import HELP, to_prom
 
 
@@ -52,10 +53,10 @@ def render(metrics):
     def flat(name, value):
         emit(to_prom(name), {}, value)
 
-    for core, value in metrics.get("cpu.utilization_per_core", {}).items():
-        emit("microsre_cpu_utilization_per_core", {"core": core}, value)
+    for core in names(metrics.get("cpu.list", "")):
+        emit("microsre_cpu_utilization_per_core", {"core": core}, metrics.get(f"cpu.{core}.utilization_pct"))
 
-    for device in metrics.get("disk.list", []):
+    for device in names(metrics.get("disk.list", "")):
         for field in (
             "read_bytes_per_sec",
             "write_bytes_per_sec",
@@ -68,7 +69,7 @@ def render(metrics):
         ):
             emit(f"microsre_disk_{field}", {"device": device}, metrics.get(f"disk.{device}.{field}"))
 
-    for iface in metrics.get("net.list", []):
+    for iface in names(metrics.get("net.list", "")):
         for field in (
             "rx_bytes_per_sec",
             "tx_bytes_per_sec",
@@ -82,9 +83,13 @@ def render(metrics):
         ):
             emit(f"microsre_net_{field}", {"iface": iface}, metrics.get(f"net.{iface}.{field}"))
 
-    labeled = [f"disk.{d}." for d in metrics.get("disk.list", [])] + [f"net.{i}." for i in metrics.get("net.list", [])]
+    labeled = (
+        [f"cpu.{c}." for c in names(metrics.get("cpu.list", ""))]
+        + [f"disk.{d}." for d in names(metrics.get("disk.list", ""))]
+        + [f"net.{i}." for i in names(metrics.get("net.list", ""))]
+    )
     for name, value in metrics.items():
-        if name == "cpu.utilization_per_core" or any(name.startswith(p) for p in labeled):
+        if any(name.startswith(p) for p in labeled):
             continue
         flat(name, value)
 

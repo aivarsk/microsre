@@ -12,7 +12,14 @@ def _delta(new, old):
     return max(0, new - old)
 
 
+def names(value):
+    # .list metrics are comma-separated strings so the whole metrics map stays
+    # scalar; this is the inverse for the few consumers that iterate members.
+    return value.split(",") if value else []
+
+
 def _calculate_metrics_cpu(metrics, start, end, interval):
+    cores = []
     for k, v in end["proc.stat"].items():
         if k.startswith("cpu") and k in start["proc.stat"]:
             o = start["proc.stat"][k]
@@ -33,10 +40,12 @@ def _calculate_metrics_cpu(metrics, start, end, interval):
                     metrics["cpu.iowait_pct"] = 0
                     metrics["cpu.steal_pct"] = 0
             else:
-                metrics.setdefault("cpu.utilization_per_core", {})[k] = utilization
+                metrics[f"cpu.{k}.utilization_pct"] = utilization
+                cores.append(k)
                 if utilization > metrics.get("cpu.max_utilization_pct", -1):
                     metrics["cpu.max_utilization_pct"] = utilization
                     metrics["cpu.max_utilization_core"] = k
+    metrics["cpu.list"] = ",".join(cores)
 
 
 def _calculate_metrics_net(metrics, start, end, interval):
@@ -58,13 +67,13 @@ def _calculate_metrics_net(metrics, start, end, interval):
     )
 
     metrics["net.max.utilization_iface"] = None
-    metrics["net.list"] = []
+    ifaces = []
 
     for k, n in end["proc.net.dev"].items():
         if k not in start["proc.net.dev"]:
             continue
         o = start["proc.net.dev"][k]
-        metrics["net.list"].append(k)
+        ifaces.append(k)
 
         for what in (
             "rx_bytes",
@@ -106,6 +115,7 @@ def _calculate_metrics_net(metrics, start, end, interval):
         metrics["net.total.errs_per_sec"] += _delta(n["rx_errs"], o["rx_errs"]) + _delta(n["tx_errs"], o["tx_errs"])
         metrics["net.total.drop_per_sec"] += _delta(n["rx_drop"], o["rx_drop"]) + _delta(n["tx_drop"], o["tx_drop"])
 
+    metrics["net.list"] = ",".join(ifaces)
     metrics["net.total.errs_per_sec"] /= interval
     metrics["net.total.drop_per_sec"] /= interval
     metrics["net.total.rx_bytes_per_sec"] /= interval
@@ -154,14 +164,14 @@ def _calculate_metrics_disk(metrics, start, end, interval):
         )
     )
 
-    metrics["disk.list"] = []
+    devices = []
     metrics["disk.max.device"] = None
 
     for k, n in end["proc.diskstats"].items():
         if k not in start["proc.diskstats"]:
             continue
         o = start["proc.diskstats"][k]
-        metrics["disk.list"].append(k)
+        devices.append(k)
         metrics[f"disk.{k}.read_bytes_per_sec"] = _delta(n["sectors_read"], o["sectors_read"]) * 512 / interval
         metrics[f"disk.{k}.write_bytes_per_sec"] = _delta(n["sectors_written"], o["sectors_written"]) * 512 / interval
         metrics[f"disk.{k}.read_iops"] = _delta(n["reads"], o["reads"]) / interval
@@ -193,6 +203,7 @@ def _calculate_metrics_disk(metrics, start, end, interval):
             metrics["disk.max.queue_depth"] = n["in_progress"]
             metrics["disk.max.device"] = k
 
+    metrics["disk.list"] = ",".join(devices)
     metrics["disk.total.read_bytes_per_sec"] /= interval
     metrics["disk.total.write_bytes_per_sec"] /= interval
     metrics["disk.total.read_iops"] /= interval
@@ -247,23 +258,23 @@ def calculate_metrics(start, end, interval):
                     metrics[f"{prefix}.pressure.{tag}.{avg}"] = end[f"proc.pressure.{file}"][tag][avg]
                     metrics[f"{prefix}.pressure.{tag}.{avg}.previous"] = start[f"proc.pressure.{file}"][tag][avg]
 
-    metrics["oom"] = end["oom"]
-    for oom in metrics["oom"]:
+    ooms = end["oom"]
+    for oom in ooms:
         with contextlib.suppress(KeyError):
             pid = start["proc.pid"][int(oom["pid"])]
             oom["cmdline"] = pid["cmdline"]
             oom["rss"] = pid["rss"]
             oom["starttime"] = pid["starttime"]
 
-    metrics["oom.count"] = len(metrics["oom"])
+    metrics["oom.count"] = len(ooms)
     metrics["oom.victims"] = "\n".join(
-        [f"PID={oom['pid']} {oom['comm']} RSS={oom.get('rss', 0) // 1048576}MiB" for oom in metrics["oom"]]
+        [f"PID={oom['pid']} {oom['comm']} RSS={oom.get('rss', 0) // 1048576}MiB" for oom in ooms]
     )
 
     for logs in ("logs", "docker-logs"):
-        metrics[f"{logs}.list"] = []
+        sources = []
         for name, stats in end[logs].items():
-            metrics[f"{logs}.list"].append(name)
+            sources.append(name)
             metrics[f"{logs}.{name}.name"] = name
             metrics[f"{logs}.{name}.line_count"] = stats["line_count"]
             metrics[f"{logs}.{name}.error_count"] = stats["error_count"]
@@ -279,5 +290,6 @@ def calculate_metrics(start, end, interval):
                 metrics[f"{logs}.{name}.heartbeat_status"] = (
                     "not seen yet" if not stats["heartbeat_last_seen"] else f"not seen for {int(age)} seconds"
                 )
+        metrics[f"{logs}.list"] = ",".join(sources)
 
     return metrics

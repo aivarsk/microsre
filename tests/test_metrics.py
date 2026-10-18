@@ -118,18 +118,71 @@ class TestRetransmit(unittest.TestCase):
 
 class TestCpuCounters(unittest.TestCase):
     def test_utilization_is_sum_of_per_field_deltas(self):
-        start = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (100, 0, 100, 700, 0, 0, 0, 0))), "procs_running": 0}})
-        end = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (200, 0, 200, 900, 0, 0, 0, 0))), "procs_running": 0}})
+        start = snapshot(
+            **{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (100, 0, 100, 700, 0, 0, 0, 0))), "procs_running": 0}}
+        )
+        end = snapshot(
+            **{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (200, 0, 200, 900, 0, 0, 0, 0))), "procs_running": 0}}
+        )
         metrics = calculate_metrics(start, end, INTERVAL)
         self.assertEqual(metrics["cpu.utilization_pct"], 50)
 
     def test_regressed_field_counts_as_zero_not_negative(self):
         # A kernel race can make one counter move backwards; that field contributes
         # 0 to the interval instead of poisoning the whole sum.
-        start = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (100, 0, 100, 700, 0, 0, 0, 0))), "procs_running": 0}})
-        end = snapshot(**{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (150, 0, 50, 900, 0, 0, 0, 0))), "procs_running": 0}})
+        start = snapshot(
+            **{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (100, 0, 100, 700, 0, 0, 0, 0))), "procs_running": 0}}
+        )
+        end = snapshot(
+            **{"proc.stat": {"cpu": dict(zip(CPU_FIELDS, (150, 0, 50, 900, 0, 0, 0, 0))), "procs_running": 0}}
+        )
         metrics = calculate_metrics(start, end, INTERVAL)
         self.assertEqual(metrics["cpu.utilization_pct"], 20)
+
+    def test_per_core_utilization_is_flattened_with_cpu_list(self):
+        start = snapshot(
+            **{
+                "proc.stat": {
+                    "cpu": dict.fromkeys(CPU_FIELDS, 0),
+                    "cpu0": dict.fromkeys(CPU_FIELDS, 0),
+                    "cpu1": dict.fromkeys(CPU_FIELDS, 0),
+                    "procs_running": 0,
+                }
+            }
+        )
+        end = snapshot(
+            **{
+                "proc.stat": {
+                    "cpu": dict.fromkeys(CPU_FIELDS, 0),
+                    # 50% and 10% utilization over the interval
+                    "cpu0": dict(zip(CPU_FIELDS, (100, 0, 0, 100, 0, 0, 0, 0))),
+                    "cpu1": dict(zip(CPU_FIELDS, (10, 0, 0, 90, 0, 0, 0, 0))),
+                    "procs_running": 0,
+                }
+            }
+        )
+        metrics = calculate_metrics(start, end, INTERVAL)
+        self.assertEqual(metrics["cpu.cpu0.utilization_pct"], 50)
+        self.assertEqual(metrics["cpu.cpu1.utilization_pct"], 10)
+        self.assertEqual(metrics["cpu.list"], "cpu0,cpu1")
+        self.assertEqual(metrics["cpu.max_utilization_pct"], 50)
+        self.assertEqual(metrics["cpu.max_utilization_core"], "cpu0")
+
+
+class TestMetricShape(unittest.TestCase):
+    def test_empty_lists_are_empty_strings(self):
+        metrics = calculate_metrics(snapshot(), snapshot(), INTERVAL)
+        for name in ("cpu.list", "disk.list", "net.list", "logs.list", "docker-logs.list"):
+            self.assertEqual(metrics[name], "")
+
+    def test_all_values_are_scalars(self):
+        # metrics is a flat map: numbers, strings, and None for unknown gauges;
+        # no lists or dicts
+        end = snapshot(**{"proc.diskstats": diskstats(reads=1, writes=1, time_reading=1, time_writing=1)})
+        metrics = calculate_metrics(snapshot(), end, INTERVAL)
+        self.assertNotIn("oom", metrics)
+        for name, value in metrics.items():
+            self.assertIsInstance(value, (int, float, str, type(None)), name)
 
 
 class TestDiskCounters(unittest.TestCase):

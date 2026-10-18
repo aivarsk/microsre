@@ -300,7 +300,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr><td><code>mem.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/memory</code></td><td>some / full line, avg10 / avg60</td><td>instantaneous (kernel-windowed)</td></tr>
 <tr><td class="group" colspan="4">CPU</td></tr>
 <tr><td><code>cpu.utilization_pct, cpu.iowait_pct, cpu.steal_pct</code></td><td><code>/proc/stat</code></td><td>cpu line - user, nice, system, idle, iowait, irq, softirq, steal ticks, diffed over the interval</td><td>integral</td></tr>
-<tr><td><code>cpu.max_utilization_pct, cpu.max_utilization_core, cpu.utilization_per_core</code></td><td><code>/proc/stat</code></td><td>cpuN per-core lines</td><td>integral</td></tr>
+<tr><td><code>cpu.max_utilization_pct, cpu.max_utilization_core, cpu.&lt;core&gt;.utilization_pct</code></td><td><code>/proc/stat</code></td><td>cpuN per-core lines</td><td>integral</td></tr>
 <tr><td><code>cpu.loadavg.1min (+ .previous)</code></td><td><code>/proc/loadavg</code></td><td>1 min field</td><td>instantaneous (kernel-decayed)</td></tr>
 <tr><td><code>cpu.run_queue, cpu.run_queue_per_cpu</code></td><td><code>/proc/loadavg</code></td><td>runnable field (self excluded), max of 5 samples 50ms apart; per_cpu is a pct of cpu.count</td><td>instantaneous (burst max of 5)</td></tr>
 <tr><td><code>cpu.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/cpu</code></td><td>some / full line, avg10 / avg60</td><td>instantaneous (kernel-windowed)</td></tr>
@@ -331,7 +331,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 
 <h4>Caveats</h4>
 <ul>
-<li><strong>CPU:</strong> cpu.utilization_pct aggregates all cores - one hot core on a many-core host is hidden. Watch cpu.max_utilization_pct and cpu.utilization_per_core.</li>
+<li><strong>CPU:</strong> cpu.utilization_pct aggregates all cores - one hot core on a many-core host is hidden. Watch cpu.max_utilization_pct or the per-core cpu.&lt;core&gt;.utilization_pct.</li>
 <li><strong>CPU:</strong> cpu.run_queue is a burst sample (max of 5 reads 50ms apart), not a continuous measurement; sub-50ms spikes can slip through.</li>
 <li><strong>Memory:</strong> MemAvailable is a kernel heuristic about reclaimable memory, not a measurement of what applications can actually allocate.</li>
 <li><strong>Pressure:</strong> PSI avg10 is a windowed average of a windowed signal - it lags real stalls and smooths over short bursts (avg60 more so).</li>

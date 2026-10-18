@@ -1,6 +1,8 @@
 import contextlib
 import itertools
 
+from microsre.metrics import names
+
 _UNITS = [("G", 1024 * 1024 * 1024), ("M", 1024 * 1024), ("K", 1_024), (" ", 1)]
 _PSUNITS = [("GB/s", 1_000_000_000), ("MB/s", 1_000_000), ("KB/s", 1_000), ("B/s ", 1)]
 
@@ -113,12 +115,13 @@ def dashboard(metrics, raw):
         )
 
     print("Disk IO")
-    width = max(len(x) for x in itertools.chain(metrics["disk.list"], ["total"])) + 2
+    devices = names(metrics["disk.list"])
+    width = max(len(x) for x in itertools.chain(devices, ["total"])) + 2
 
     def format_iops(n):
         return f"{n:>5.1f} IOPS"
 
-    for device in sorted(metrics["disk.list"]):
+    for device in sorted(devices):
         print(
             f"{device:>{width}}:",
             "Read",
@@ -143,8 +146,9 @@ def dashboard(metrics, raw):
     )
 
     print("Network")
-    width = max(len(x) for x in itertools.chain(metrics["net.list"], ["total"])) + 2
-    for iface in sorted(metrics["net.list"]):
+    ifaces = names(metrics["net.list"])
+    width = max(len(x) for x in itertools.chain(ifaces, ["total"])) + 2
+    for iface in sorted(ifaces):
         print(
             f"{iface:>{width}}:",
             "tx",
@@ -175,13 +179,14 @@ def dashboard(metrics, raw):
         metrics["net.tcp.listen_overflows"],
     )
 
-    for oom in metrics.get("oom", []):
+    for oom in raw.get("oom", []):
         print(f"!!! OOM killed PID={oom['pid']} name={oom['comm']}")
 
     print("Logs")
-    width = max((len(x) for x in itertools.chain(metrics["logs.list"], metrics["docker-logs.list"])), default=0) + 2
+    log_sources = itertools.chain(names(metrics["logs.list"]), names(metrics["docker-logs.list"]))
+    width = max((len(x) for x in log_sources), default=0) + 2
     for logs in ("logs", "docker-logs"):
-        for name in metrics[f"{logs}.list"]:
+        for name in names(metrics[f"{logs}.list"]):
             print(
                 f"{name:>{width}}: ",
                 "err",

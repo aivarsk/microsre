@@ -66,11 +66,11 @@ class TestRender(unittest.TestCase):
 
     def test_disk_and_net_families_become_labels(self):
         metrics = {
-            "disk.list": ["sda"],
+            "disk.list": "sda",
             "disk.sda.await_ms": 20,
             "disk.sda.utilization_pct": 40.5,
             "disk.sda.queue_depth": 3,
-            "net.list": ["eth0"],
+            "net.list": "eth0",
             "net.eth0.rx_bytes_per_sec": 100,
         }
         text = prom.render(metrics)
@@ -82,9 +82,20 @@ class TestRender(unittest.TestCase):
         self.assertNotIn("microsre_disk_sda_await_ms", text)
 
     def test_per_core_becomes_label(self):
-        text = prom.render({"cpu.utilization_per_core": {"cpu0": 10, "cpu1": 5}})
+        metrics = {
+            "cpu.list": "cpu0,cpu1",
+            "cpu.cpu0.utilization_pct": 10,
+            "cpu.cpu1.utilization_pct": 5,
+        }
+        text = prom.render(metrics)
         self.assertIn('microsre_cpu_utilization_per_core{core="cpu0"} 10', text)
         self.assertIn('microsre_cpu_utilization_per_core{core="cpu1"} 5', text)
+        # labeled families are not duplicated as flat names
+        self.assertNotIn("microsre_cpu_cpu0_utilization_pct", text)
+
+    def test_empty_lists_emit_no_labeled_lines(self):
+        text = prom.render({"cpu.list": "", "disk.list": "", "net.list": ""})
+        self.assertEqual(text, "\n")
 
     def test_non_numeric_fields_are_skipped(self):
         metrics = {"hostname": "h", "disk.max.device": None, "net.max.rx_iface": "eth0", "oom.victims": "PID=1 x"}
@@ -96,12 +107,12 @@ class TestRender(unittest.TestCase):
         self.assertIn("microsre_docker_logs_my_app_error_pct 2", text)
 
     def test_type_line_emitted_once_per_name(self):
-        metrics = {"disk.list": ["sda", "sdb"], "disk.sda.await_ms": 1, "disk.sdb.await_ms": 2}
+        metrics = {"disk.list": "sda,sdb", "disk.sda.await_ms": 1, "disk.sdb.await_ms": 2}
         text = prom.render(metrics)
         self.assertEqual(text.count("# TYPE microsre_disk_await_ms gauge"), 1)
 
     def test_help_lines_come_from_registry(self):
-        metrics = {"mem.utilization_pct": 50, "disk.list": ["sda"], "disk.sda.await_ms": 20}
+        metrics = {"mem.utilization_pct": 50, "disk.list": "sda", "disk.sda.await_ms": 20}
         text = prom.render(metrics)
         self.assertIn("# HELP microsre_mem_utilization_pct MemTotal, MemAvailable", text)
         self.assertIn("(source: /proc/meminfo)", text)

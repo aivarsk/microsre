@@ -59,9 +59,9 @@ ROWS = (
     ),
     (
         "CPU",
-        "cpu.max_utilization_pct, cpu.max_utilization_core, cpu.utilization_per_core",
-        ("cpu.max_utilization_pct", "cpu.max_utilization_core", "cpu.utilization_per_core"),
-        (),
+        "cpu.max_utilization_pct, cpu.max_utilization_core, cpu.<core>.utilization_pct",
+        ("cpu.max_utilization_pct", "cpu.max_utilization_core"),
+        ("cpu_utilization_per_core",),
         "/proc/stat",
         "cpuN per-core lines",
         True,
@@ -331,7 +331,7 @@ HELP = {
 CAVEATS = (
     (
         "CPU",
-        "cpu.utilization_pct aggregates all cores - one hot core on a many-core host is hidden. Watch cpu.max_utilization_pct and cpu.utilization_per_core.",
+        "cpu.utilization_pct aggregates all cores - one hot core on a many-core host is hidden. Watch cpu.max_utilization_pct or the per-core cpu.<core>.utilization_pct.",
     ),
     (
         "CPU",
