@@ -67,6 +67,11 @@
       <h2>Free, as in the product</h2>
       <p>The local agent is free and open source (<a href="https://github.com/aivarsk/microsre">MIT</a>), forever. It's the product, not a demo: every signal, every alert, the Prometheus endpoint, heartbeat log monitoring, restart catch-up - all of it works standalone, with no account and no hosted dependency.</p>
       <p>Alerts go direct from your machine to Slack, Discord, Telegram, or any URL that accepts a JSON POST - no microSRE server in the path. Your history is your chat, your state is a sqlite file on your machine, your data never transits us. The hosted view is an opt-in addition, not a dependency wearing a freemium hat.</p>
+
+      <figure class="text-center mt-4" style="max-width: 560px; margin-left: auto; margin-right: auto;">
+        <img src="alert.jpg" alt="Telegram messages from the microSRE agent: a disk.space_usage_pct alert on a server at 19:39 and a Recovered message seven minutes later" class="img-fluid border rounded">
+        <figcaption class="text-muted small mt-2">A real alert, from a real machine, on a real Saturday - sent straight from the server to Telegram by the free local agent. No microSRE server in the path.</figcaption>
+      </figure>
     </div>
   </section>
 
