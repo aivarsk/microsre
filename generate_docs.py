@@ -10,18 +10,18 @@ END = "<!-- metrics:table:end -->"
 
 def table():
     rows = ["<p>Every metric, exactly where it comes from, and how it is measured:</p>", "", "<table>"]
-    rows.append("<tr><th>Metric</th><th>Source file</th><th>Field(s)</th><th>Semantics</th></tr>")
+    rows.append("<tr><th>Metric</th><th>Source file</th><th>Semantics</th></tr>")
     family = None
     for fam, display, names, prom, source, fields, alertable, semantics in registry.ROWS:
         if fam != family:
             family = fam
-            rows.append(f'<tr><td class="group" colspan="4">{html.escape(fam)}</td></tr>')
+            rows.append(f'<tr><td class="group" colspan="3">{html.escape(fam)}</td></tr>')
         rows.append(
             f"<tr><td><code>{html.escape(display)}</code></td>"
             f"<td><code>{html.escape(source)}</code></td>"
-            f"<td>{html.escape(fields)}</td>"
             f"<td>{html.escape(semantics)}</td></tr>"
         )
+        rows.append(f'<tr class="fields"><td colspan="3">{html.escape(fields)}</td></tr>')
     rows.append("</table>")
     rows += ["", "<h4>Caveats</h4>", "<ul>"]
     for family, text in registry.CAVEATS:

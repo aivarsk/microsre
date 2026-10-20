@@ -83,6 +83,7 @@
   th, td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { background: #f8f9fa; }
   td.group { background: #f8f9fa; font-weight: 700; }
+  tr.fields td { background: #fafbfc; color: #555; font-size: 0.85em; }
   figure.shot { margin: 2rem 0; text-align: center; }
   figure.shot img { max-width: 100%; border: 1px solid var(--line); border-radius: 0.5rem; }
   figure.shot figcaption { color: #666; font-size: 0.9em; margin-top: 0.6rem; }
@@ -297,49 +298,83 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <p>Every metric, exactly where it comes from, and how it is measured:</p>
 
 <table>
-<tr><th>Metric</th><th>Source file</th><th>Field(s)</th><th>Semantics</th></tr>
-<tr><td class="group" colspan="4">Memory</td></tr>
-<tr><td><code>mem.utilization_pct</code></td><td><code>/proc/meminfo</code></td><td>MemTotal, MemAvailable (used = total - available)</td><td>instantaneous</td></tr>
-<tr><td><code>mem.swap_utilization_pct</code></td><td><code>/proc/meminfo</code></td><td>SwapTotal, SwapFree</td><td>instantaneous</td></tr>
-<tr><td><code>vm.swap_in_bytes_per_sec, vm.swap_out_bytes_per_sec, vm.major_faults_per_sec</code></td><td><code>/proc/vmstat</code></td><td>pswpin, pswpout, pgmajfault diffs over the interval, swap rates in bytes; the interval view of burst.vm.max_*</td><td>integral (counter diff)</td></tr>
-<tr><td><code>mem.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/memory</code></td><td>some / full line, avg10 / avg60</td><td>instantaneous (kernel-windowed)</td></tr>
-<tr><td class="group" colspan="4">CPU</td></tr>
-<tr><td><code>cpu.utilization_pct, cpu.iowait_pct, cpu.steal_pct</code></td><td><code>/proc/stat</code></td><td>cpu line - user, nice, system, idle, iowait, irq, softirq, steal ticks, diffed over the interval</td><td>integral</td></tr>
-<tr><td><code>cpu.max_utilization_pct, cpu.max_utilization_core, cpu.&lt;core&gt;.utilization_pct</code></td><td><code>/proc/stat</code></td><td>cpuN per-core lines</td><td>integral</td></tr>
-<tr><td><code>cpu.loadavg.1min (+ .previous)</code></td><td><code>/proc/loadavg</code></td><td>1 min field</td><td>instantaneous (kernel-decayed)</td></tr>
-<tr><td><code>cpu.ctxt_per_sec</code></td><td><code>/proc/stat</code></td><td>context switches per second, averaged over the interval; the interval view of burst.cpu.max_ctxt_per_sec</td><td>integral (counter diff)</td></tr>
-<tr><td><code>cpu.procs_blocked</code></td><td><code>/proc/stat</code></td><td>tasks in uninterruptible (D) sleep at tick time; the interval view of burst.cpu.max_procs_blocked</td><td>instantaneous</td></tr>
-<tr><td><code>cpu.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/cpu</code></td><td>some / full line, avg10 / avg60</td><td>instantaneous (kernel-windowed)</td></tr>
-<tr><td class="group" colspan="4">Disk</td></tr>
-<tr><td><code>disk.space_usage_pct</code></td><td><code>/proc/self/mountinfo</code></td><td>per-mount statvfs bytes used / total; each device counted once</td><td>instantaneous</td></tr>
-<tr><td><code>disk.max.utilization_pct, disk.max.await_ms, disk.max.queue_depth, disk.max.device</code></td><td><code>/proc/diskstats</code></td><td>per device: time_in_progress diff; await = (time_reading + time_writing) / (reads + writes); queue depth = in_progress gauge; stacked dm/md deduplicated to the backing disk</td><td>integral; instantaneous (queue depth)</td></tr>
-<tr><td><code>disk.total.{read,write}_bytes_per_sec</code></td><td><code>/proc/diskstats</code></td><td>sectors_read / sectors_written x 512-byte sectors (standard kernel units)</td><td>integral</td></tr>
-<tr><td><code>disk.total.{read,write}_iops</code></td><td><code>/proc/diskstats</code></td><td>reads / writes completed</td><td>counter</td></tr>
-<tr><td><code>disk.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/io</code></td><td>some / full line, avg10 / avg60</td><td>instantaneous (kernel-windowed)</td></tr>
-<tr><td><code>disk.&lt;device&gt;.*</code></td><td><code>/proc/diskstats</code></td><td>per-device counters, diffs over the check interval</td><td>integral; instantaneous (queue depth)</td></tr>
-<tr><td class="group" colspan="4">Network</td></tr>
-<tr><td><code>net.total.{rx,tx}_bytes_per_sec</code></td><td><code>/proc/net/dev</code></td><td>sum of per-interface rx_bytes / tx_bytes</td><td>integral</td></tr>
-<tr><td><code>net.total.errs_per_sec, net.total.drop_per_sec</code></td><td><code>/proc/net/dev</code></td><td>rx_errs + tx_errs, rx_drop + tx_drop</td><td>counter</td></tr>
-<tr><td><code>net.tcp.retrans_per_sec, net.tcp.retrans_ratio_pct</code></td><td><code>/proc/net/snmp</code></td><td>Tcp: - RetransSegs, OutSegs</td><td>counter</td></tr>
-<tr><td><code>net.tcp.listen_drops, net.tcp.listen_overflows</code></td><td><code>/proc/net/netstat</code></td><td>TcpExt: - ListenDrops, ListenOverflows</td><td>counter</td></tr>
-<tr><td><code>net.max.utilization_pct, net.max.utilization_iface</code></td><td><code>/proc/net/dev + /sys/class/net/&lt;iface&gt;/speed</code></td><td>max of rx/tx bytes x8 as % of link speed (unknown for virtual or link-down interfaces)</td><td>integral</td></tr>
-<tr><td><code>net.max.{rx,tx}_bytes_per_sec, net.max.{rx,tx}_iface</code></td><td><code>/proc/net/dev</code></td><td>busiest interface by bytes</td><td>integral</td></tr>
-<tr><td><code>net.&lt;iface&gt;.*</code></td><td><code>/proc/net/dev</code></td><td>per-interface counters, diffs over the check interval</td><td>integral; counter (errs, drop)</td></tr>
-<tr><td class="group" colspan="4">Burst</td></tr>
-<tr><td><code>burst.cpu.max_utilization_pct, burst.cpu.max_utilization_core, burst.cpu.max_steal_pct, burst.cpu.max_iowait_pct, burst.cpu.max_ctxt_per_sec, burst.cpu.max_procs_running, burst.cpu.max_procs_blocked</code></td><td><code>burst sampler: /proc/stat every second</code></td><td>worst second in the window: hottest core, steal, iowait, context switches, runnable and blocked task counts; procs_running excludes the sampler itself</td><td>max over 1s sub-intervals</td></tr>
-<tr><td><code>burst.disk.max_utilization_pct, burst.disk.max_utilization_device</code></td><td><code>burst sampler: /proc/diskstats every second</code></td><td>the busiest device-second in the window</td><td>max over 1s sub-intervals</td></tr>
-<tr><td><code>burst.net.tcp.max_retrans_per_sec, burst.net.tcp.max_listen_drops_per_sec, burst.net.tcp.max_listen_overflows_per_sec</code></td><td><code>burst sampler: /proc/net/snmp, /proc/net/netstat every second</code></td><td>worst second in the window for retransmits and listen queue drops</td><td>max over 1s sub-intervals</td></tr>
-<tr><td><code>burst.vm.max_swap_in_bytes_per_sec, burst.vm.max_swap_out_bytes_per_sec, burst.vm.max_major_faults_per_sec</code></td><td><code>burst sampler: /proc/vmstat every second</code></td><td>worst second in the window for swap in/out and major faults</td><td>max over 1s sub-intervals</td></tr>
-<tr><td><code>burst.disk.&lt;device&gt;.*, burst.net.&lt;iface&gt;.*</code></td><td><code>burst sampler: /proc/diskstats, /proc/net/dev every second</code></td><td>per-device and per-interface worst-second values</td><td>max over 1s sub-intervals</td></tr>
-<tr><td><code>burst.samples, burst.dropped</code></td><td><code>burst sampler</code></td><td>how many sub-samples the window maxima rest on; dropped counts samples overwritten when the main loop fell behind</td><td>counter</td></tr>
-<tr><td class="group" colspan="4">OOM kills</td></tr>
-<tr><td><code>oom.count, oom.victims</code></td><td><code>kernel log (auto-detected, no config)</code></td><td>OOM killer events</td><td>counter</td></tr>
-<tr><td class="group" colspan="4">Log sources</td></tr>
-<tr><td><code>logs.&lt;source&gt;.*, docker-logs.&lt;source&gt;.* (per configured log source)</code></td><td><code>the configured log file or container JSON logs</code></td><td>line_count / error_count / error_pct / errors - lines matching line_pattern / error_pattern; with heartbeat_pattern configured: heartbeat_last_seen (unix time of last match, 0 = never), heartbeat_age_seconds (seconds since it, huge when never), heartbeat_status (pre-worded &#x27;not seen yet&#x27; / &#x27;not seen for N seconds&#x27; for templates)</td><td>counter; gauge (heartbeat age)</td></tr>
-<tr><td class="group" colspan="4">Collection</td></tr>
-<tr><td><code>collect.procfs_seconds, collect.proc_pid_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>procfs collection time per tick; proc_pid is the /proc/&lt;pid&gt; scan portion of it</td><td>measured duration</td></tr>
-<tr><td><code>collect.logs_seconds, collect.docker_logs_seconds, collect.oom_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>log scanning time per tick</td><td>measured duration</td></tr>
-<tr><td><code>self.cpu_seconds, self.cpu_pct, self.rss_bytes, self.read_bytes_per_sec, self.ctx_switches_per_sec</code></td><td><code>self-measured, /proc/self/stat, /proc/self/io, /proc/self/status</code></td><td>microsre itself: total CPU seconds, CPU pct last interval, RSS, storage reads caused, wakeups per second</td><td>mixed: counter, integral, instantaneous</td></tr>
+<tr><th>Metric</th><th>Source file</th><th>Semantics</th></tr>
+<tr><td class="group" colspan="3">Memory</td></tr>
+<tr><td><code>mem.utilization_pct</code></td><td><code>/proc/meminfo</code></td><td>instantaneous</td></tr>
+<tr class="fields"><td colspan="3">MemTotal, MemAvailable (used = total - available)</td></tr>
+<tr><td><code>mem.swap_utilization_pct</code></td><td><code>/proc/meminfo</code></td><td>instantaneous</td></tr>
+<tr class="fields"><td colspan="3">SwapTotal, SwapFree</td></tr>
+<tr><td><code>vm.swap_in_bytes_per_sec, vm.swap_out_bytes_per_sec, vm.major_faults_per_sec</code></td><td><code>/proc/vmstat</code></td><td>integral (counter diff)</td></tr>
+<tr class="fields"><td colspan="3">pswpin, pswpout, pgmajfault diffs over the interval, swap rates in bytes; the interval view of burst.vm.max_*</td></tr>
+<tr><td><code>mem.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/memory</code></td><td>instantaneous (kernel-windowed)</td></tr>
+<tr class="fields"><td colspan="3">some / full line, avg10 / avg60</td></tr>
+<tr><td class="group" colspan="3">CPU</td></tr>
+<tr><td><code>cpu.utilization_pct, cpu.iowait_pct, cpu.steal_pct</code></td><td><code>/proc/stat</code></td><td>integral</td></tr>
+<tr class="fields"><td colspan="3">cpu line - user, nice, system, idle, iowait, irq, softirq, steal ticks, diffed over the interval</td></tr>
+<tr><td><code>cpu.max_utilization_pct, cpu.max_utilization_core, cpu.&lt;core&gt;.utilization_pct</code></td><td><code>/proc/stat</code></td><td>integral</td></tr>
+<tr class="fields"><td colspan="3">cpuN per-core lines</td></tr>
+<tr><td><code>cpu.loadavg.1min (+ .previous)</code></td><td><code>/proc/loadavg</code></td><td>instantaneous (kernel-decayed)</td></tr>
+<tr class="fields"><td colspan="3">1 min field</td></tr>
+<tr><td><code>cpu.ctxt_per_sec</code></td><td><code>/proc/stat</code></td><td>integral (counter diff)</td></tr>
+<tr class="fields"><td colspan="3">context switches per second, averaged over the interval; the interval view of burst.cpu.max_ctxt_per_sec</td></tr>
+<tr><td><code>cpu.procs_blocked</code></td><td><code>/proc/stat</code></td><td>instantaneous</td></tr>
+<tr class="fields"><td colspan="3">tasks in uninterruptible (D) sleep at tick time; the interval view of burst.cpu.max_procs_blocked</td></tr>
+<tr><td><code>cpu.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/cpu</code></td><td>instantaneous (kernel-windowed)</td></tr>
+<tr class="fields"><td colspan="3">some / full line, avg10 / avg60</td></tr>
+<tr><td class="group" colspan="3">Disk</td></tr>
+<tr><td><code>disk.space_usage_pct</code></td><td><code>/proc/self/mountinfo</code></td><td>instantaneous</td></tr>
+<tr class="fields"><td colspan="3">per-mount statvfs bytes used / total; each device counted once</td></tr>
+<tr><td><code>disk.max.utilization_pct, disk.max.await_ms, disk.max.queue_depth, disk.max.device</code></td><td><code>/proc/diskstats</code></td><td>integral; instantaneous (queue depth)</td></tr>
+<tr class="fields"><td colspan="3">per device: time_in_progress diff; await = (time_reading + time_writing) / (reads + writes); queue depth = in_progress gauge; stacked dm/md deduplicated to the backing disk</td></tr>
+<tr><td><code>disk.total.{read,write}_bytes_per_sec</code></td><td><code>/proc/diskstats</code></td><td>integral</td></tr>
+<tr class="fields"><td colspan="3">sectors_read / sectors_written x 512-byte sectors (standard kernel units)</td></tr>
+<tr><td><code>disk.total.{read,write}_iops</code></td><td><code>/proc/diskstats</code></td><td>counter</td></tr>
+<tr class="fields"><td colspan="3">reads / writes completed</td></tr>
+<tr><td><code>disk.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/io</code></td><td>instantaneous (kernel-windowed)</td></tr>
+<tr class="fields"><td colspan="3">some / full line, avg10 / avg60</td></tr>
+<tr><td><code>disk.&lt;device&gt;.*</code></td><td><code>/proc/diskstats</code></td><td>integral; instantaneous (queue depth)</td></tr>
+<tr class="fields"><td colspan="3">per-device counters, diffs over the check interval</td></tr>
+<tr><td class="group" colspan="3">Network</td></tr>
+<tr><td><code>net.total.{rx,tx}_bytes_per_sec</code></td><td><code>/proc/net/dev</code></td><td>integral</td></tr>
+<tr class="fields"><td colspan="3">sum of per-interface rx_bytes / tx_bytes</td></tr>
+<tr><td><code>net.total.errs_per_sec, net.total.drop_per_sec</code></td><td><code>/proc/net/dev</code></td><td>counter</td></tr>
+<tr class="fields"><td colspan="3">rx_errs + tx_errs, rx_drop + tx_drop</td></tr>
+<tr><td><code>net.tcp.retrans_per_sec, net.tcp.retrans_ratio_pct</code></td><td><code>/proc/net/snmp</code></td><td>counter</td></tr>
+<tr class="fields"><td colspan="3">Tcp: - RetransSegs, OutSegs</td></tr>
+<tr><td><code>net.tcp.listen_drops, net.tcp.listen_overflows</code></td><td><code>/proc/net/netstat</code></td><td>counter</td></tr>
+<tr class="fields"><td colspan="3">TcpExt: - ListenDrops, ListenOverflows</td></tr>
+<tr><td><code>net.max.utilization_pct, net.max.utilization_iface</code></td><td><code>/proc/net/dev + /sys/class/net/&lt;iface&gt;/speed</code></td><td>integral</td></tr>
+<tr class="fields"><td colspan="3">max of rx/tx bytes x8 as % of link speed (unknown for virtual or link-down interfaces)</td></tr>
+<tr><td><code>net.max.{rx,tx}_bytes_per_sec, net.max.{rx,tx}_iface</code></td><td><code>/proc/net/dev</code></td><td>integral</td></tr>
+<tr class="fields"><td colspan="3">busiest interface by bytes</td></tr>
+<tr><td><code>net.&lt;iface&gt;.*</code></td><td><code>/proc/net/dev</code></td><td>integral; counter (errs, drop)</td></tr>
+<tr class="fields"><td colspan="3">per-interface counters, diffs over the check interval</td></tr>
+<tr><td class="group" colspan="3">Burst</td></tr>
+<tr><td><code>burst.cpu.max_utilization_pct, burst.cpu.max_utilization_core, burst.cpu.max_steal_pct, burst.cpu.max_iowait_pct, burst.cpu.max_ctxt_per_sec, burst.cpu.max_procs_running, burst.cpu.max_procs_blocked</code></td><td><code>burst sampler: /proc/stat every second</code></td><td>max over 1s sub-intervals</td></tr>
+<tr class="fields"><td colspan="3">worst second in the window: hottest core, steal, iowait, context switches, runnable and blocked task counts; procs_running excludes the sampler itself</td></tr>
+<tr><td><code>burst.disk.max_utilization_pct, burst.disk.max_utilization_device</code></td><td><code>burst sampler: /proc/diskstats every second</code></td><td>max over 1s sub-intervals</td></tr>
+<tr class="fields"><td colspan="3">the busiest device-second in the window</td></tr>
+<tr><td><code>burst.net.tcp.max_retrans_per_sec, burst.net.tcp.max_listen_drops_per_sec, burst.net.tcp.max_listen_overflows_per_sec</code></td><td><code>burst sampler: /proc/net/snmp, /proc/net/netstat every second</code></td><td>max over 1s sub-intervals</td></tr>
+<tr class="fields"><td colspan="3">worst second in the window for retransmits and listen queue drops</td></tr>
+<tr><td><code>burst.vm.max_swap_in_bytes_per_sec, burst.vm.max_swap_out_bytes_per_sec, burst.vm.max_major_faults_per_sec</code></td><td><code>burst sampler: /proc/vmstat every second</code></td><td>max over 1s sub-intervals</td></tr>
+<tr class="fields"><td colspan="3">worst second in the window for swap in/out and major faults</td></tr>
+<tr><td><code>burst.disk.&lt;device&gt;.*, burst.net.&lt;iface&gt;.*</code></td><td><code>burst sampler: /proc/diskstats, /proc/net/dev every second</code></td><td>max over 1s sub-intervals</td></tr>
+<tr class="fields"><td colspan="3">per-device and per-interface worst-second values</td></tr>
+<tr><td><code>burst.samples, burst.dropped</code></td><td><code>burst sampler</code></td><td>counter</td></tr>
+<tr class="fields"><td colspan="3">how many sub-samples the window maxima rest on; dropped counts samples overwritten when the main loop fell behind</td></tr>
+<tr><td class="group" colspan="3">OOM kills</td></tr>
+<tr><td><code>oom.count, oom.victims</code></td><td><code>kernel log (auto-detected, no config)</code></td><td>counter</td></tr>
+<tr class="fields"><td colspan="3">OOM killer events</td></tr>
+<tr><td class="group" colspan="3">Log sources</td></tr>
+<tr><td><code>logs.&lt;source&gt;.*, docker-logs.&lt;source&gt;.* (per configured log source)</code></td><td><code>the configured log file or container JSON logs</code></td><td>counter; gauge (heartbeat age)</td></tr>
+<tr class="fields"><td colspan="3">line_count / error_count / error_pct / errors - lines matching line_pattern / error_pattern; with heartbeat_pattern configured: heartbeat_last_seen (unix time of last match, 0 = never), heartbeat_age_seconds (seconds since it, huge when never), heartbeat_status (pre-worded &#x27;not seen yet&#x27; / &#x27;not seen for N seconds&#x27; for templates)</td></tr>
+<tr><td class="group" colspan="3">Collection</td></tr>
+<tr><td><code>collect.procfs_seconds, collect.proc_pid_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>measured duration</td></tr>
+<tr class="fields"><td colspan="3">procfs collection time per tick; proc_pid is the /proc/&lt;pid&gt; scan portion of it</td></tr>
+<tr><td><code>collect.logs_seconds, collect.docker_logs_seconds, collect.oom_seconds</code></td><td><code>self-measured, time.monotonic_ns() around the collectors</code></td><td>measured duration</td></tr>
+<tr class="fields"><td colspan="3">log scanning time per tick</td></tr>
+<tr><td><code>self.cpu_seconds, self.cpu_pct, self.rss_bytes, self.read_bytes_per_sec, self.ctx_switches_per_sec</code></td><td><code>self-measured, /proc/self/stat, /proc/self/io, /proc/self/status</code></td><td>mixed: counter, integral, instantaneous</td></tr>
+<tr class="fields"><td colspan="3">microsre itself: total CPU seconds, CPU pct last interval, RSS, storage reads caused, wakeups per second</td></tr>
 </table>
 
 <h4>Caveats</h4>
