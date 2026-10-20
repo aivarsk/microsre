@@ -120,7 +120,7 @@
 
 <h2 id="install">Installation</h2>
 
-<p>microSRE is a single static binary. No dependencies. No package manager required.</p>
+<p>microSRE ships as a single Python zipapp. No third-party dependencies, no package manager; the one requirement is Python 3.11 or newer.</p>
 
 <p>Root or a regular user? While a regular user is enough, running under root may be a better choice when:
 <ul>
@@ -133,7 +133,7 @@
 
 <p>The installer downloads the latest release, creates a systemd service if systemd is present and starts it up.</p>
 
-<p>To install manually, grab the binary from the <a href="https://github.com/microsre/microsre/releases">releases page</a> and place it anywhere in your <code>$PATH</code>.</p>
+<p>To install manually, download <code>microsre-&lt;version&gt;.pyz</code> from the <a href="https://github.com/aivarsk/microsre/releases">releases page</a>, rename it to <code>microsre</code>, and make it executable. The rename is not cosmetic: whatever sits on your <code>$PATH</code> is the command you type, and nobody wants to type the versioned file name. Requires Python 3.11 or newer.</p>
 
 <h3>Verify</h3>
 
