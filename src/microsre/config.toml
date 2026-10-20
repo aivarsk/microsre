@@ -1,7 +1,7 @@
 # microsre.io configuration file
 
 # Report to microsre.io SaaS
-# ingest_url="https://eu.microsre.io/ingest?token=<your tokan>"
+# ingest_url="https://app.microsre.io/ingest?token=<your tokan>"
 
 # Expose metrics for Prometheus scraping
 # prometheus_listen = "127.0.0.1:9100"

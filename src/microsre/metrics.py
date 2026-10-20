@@ -1,5 +1,8 @@
 import contextlib
+import os
 import time
+
+_PAGE_SIZE = os.sysconf("SC_PAGE_SIZE")
 
 
 def _pct(value, total):
@@ -13,32 +16,36 @@ def _delta(new, old):
 
 
 def names(value):
-    # .list metrics are comma-separated strings so the whole metrics map stays
-    # scalar; this is the inverse for the few consumers that iterate members.
     return value.split(",") if value else []
+
+
+_CPU_FIELDS = ("user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal")
+_CPU_ACTIVE = ("user", "nice", "system", "irq", "softirq", "steal")
+_CPU_TOTAL = _CPU_ACTIVE + ("idle", "iowait")
+
+
+def _cpu_line_pct(fields, previous):
+    delta = {field: _delta(fields[field], previous[field]) for field in _CPU_FIELDS}
+    total = sum(delta[field] for field in _CPU_TOTAL)
+    if not total:
+        return 0, 0, 0
+    active = sum(delta[field] for field in _CPU_ACTIVE)
+    return int(active * 100 / total), int(delta["steal"] * 100 / total), int(delta["iowait"] * 100 / total)
+
+
+def _disk_utilization_pct(previous, current, interval):
+    return _delta(current["time_in_progress"], previous["time_in_progress"]) * 100 / (interval * 1000)
 
 
 def _calculate_metrics_cpu(metrics, start, end, interval):
     cores = []
     for k, v in end["proc.stat"].items():
         if k.startswith("cpu") and k in start["proc.stat"]:
-            o = start["proc.stat"][k]
-            akeys = ("user", "nice", "system", "irq", "softirq", "steal")
-            active = sum(_delta(v[i], o[i]) for i in akeys)
-            tkeys = akeys + ("idle", "iowait")
-            total = sum(_delta(v[i], o[i]) for i in tkeys)
-            try:
-                utilization = int(active * 100 / total)
-            except ZeroDivisionError:
-                utilization = 0
+            utilization, steal, iowait = _cpu_line_pct(v, start["proc.stat"][k])
             if k == "cpu":
                 metrics["cpu.utilization_pct"] = utilization
-                try:
-                    metrics["cpu.iowait_pct"] = int((v["iowait"] - o["iowait"]) * 100 / total)
-                    metrics["cpu.steal_pct"] = int((v["steal"] - o["steal"]) * 100 / total)
-                except ZeroDivisionError:
-                    metrics["cpu.iowait_pct"] = 0
-                    metrics["cpu.steal_pct"] = 0
+                metrics["cpu.iowait_pct"] = iowait
+                metrics["cpu.steal_pct"] = steal
             else:
                 metrics[f"cpu.{k}.utilization_pct"] = utilization
                 cores.append(k)
@@ -189,9 +196,7 @@ def _calculate_metrics_disk(metrics, start, end, interval):
         except ZeroDivisionError:
             metrics[f"disk.{k}.await_ms"] = 0
 
-        metrics[f"disk.{k}.utilization_pct"] = (
-            _delta(n["time_in_progress"], o["time_in_progress"]) * 100 / (interval * 1000)
-        )
+        metrics[f"disk.{k}.utilization_pct"] = _disk_utilization_pct(o, n, interval)
         metrics[f"disk.{k}.weighted_utilization_pct"] = (
             _delta(n["weighted_time_in_progress"], o["weighted_time_in_progress"]) * 100 / (interval * 1000)
         )
@@ -210,6 +215,80 @@ def _calculate_metrics_disk(metrics, start, end, interval):
     metrics["disk.total.write_iops"] /= interval
 
 
+def calculate_burst_metrics(previous, current, interval):
+    metrics = {}
+    stat, prev_stat = current["stat"], previous["stat"]
+
+    with contextlib.suppress(KeyError):
+        metrics["cpu.max_ctxt_per_sec"] = _delta(stat["ctxt"], prev_stat["ctxt"]) / interval
+    if "procs_running" in stat:
+        metrics["cpu.max_procs_running"] = max(0, stat["procs_running"] - 1)
+    if "procs_blocked" in stat:
+        metrics["cpu.max_procs_blocked"] = stat["procs_blocked"]
+
+    per_core = []
+    for name, fields in stat.items():
+        if name == "cpu" or not name.startswith("cpu") or name not in prev_stat:
+            continue
+        utilization, steal, iowait = _cpu_line_pct(fields, prev_stat[name])
+        per_core.append((utilization, steal, iowait, name))
+    if per_core:
+        hottest = max(per_core, key=lambda core: core[0])
+        metrics["cpu.max_utilization_pct"] = hottest[0]
+        metrics["cpu.max_utilization_core"] = hottest[3]
+        metrics["cpu.max_steal_pct"] = max(core[1] for core in per_core)
+        metrics["cpu.max_iowait_pct"] = max(core[2] for core in per_core)
+
+    utils = []
+    for name, fields in current["diskstats"].items():
+        prev = previous["diskstats"].get(name)
+        if prev is None:
+            continue
+        metrics[f"disk.{name}.utilization_pct"] = _disk_utilization_pct(prev, fields, interval)
+        metrics[f"disk.{name}.queue_depth"] = fields["in_progress"]
+        metrics[f"disk.{name}.read_bytes_per_sec"] = (
+            _delta(fields["sectors_read"], prev["sectors_read"]) * 512 / interval
+        )
+        metrics[f"disk.{name}.write_bytes_per_sec"] = (
+            _delta(fields["sectors_written"], prev["sectors_written"]) * 512 / interval
+        )
+        utils.append((metrics[f"disk.{name}.utilization_pct"], name))
+    if utils:
+        metrics["disk.max_utilization_pct"] = max(util for util, _ in utils)
+        metrics["disk.max_utilization_device"] = max(utils)[1]
+
+    for name, fields in current["net.dev"].items():
+        prev = previous["net.dev"].get(name)
+        if prev is None:
+            continue
+        metrics[f"net.{name}.rx_bytes_per_sec"] = _delta(fields["rx_bytes"], prev["rx_bytes"]) / interval
+        metrics[f"net.{name}.tx_bytes_per_sec"] = _delta(fields["tx_bytes"], prev["tx_bytes"]) / interval
+
+    with contextlib.suppress(KeyError):
+        metrics["net.tcp.max_retrans_per_sec"] = (
+            _delta(current["net.snmp"]["TcpRetransSegs"], previous["net.snmp"]["TcpRetransSegs"]) / interval
+        )
+    for key, metric in (
+        ("TcpExtListenDrops", "net.tcp.max_listen_drops_per_sec"),
+        ("TcpExtListenOverflows", "net.tcp.max_listen_overflows_per_sec"),
+    ):
+        with contextlib.suppress(KeyError):
+            metrics[metric] = _delta(current["net.netstat"][key], previous["net.netstat"][key]) / interval
+
+    for key, metric in (
+        ("pswpin", "vm.max_swap_in_bytes_per_sec"),
+        ("pswpout", "vm.max_swap_out_bytes_per_sec"),
+    ):
+        with contextlib.suppress(KeyError):
+            metrics[metric] = _delta(current["vmstat"][key], previous["vmstat"][key]) * _PAGE_SIZE / interval
+    with contextlib.suppress(KeyError):
+        metrics["vm.max_major_faults_per_sec"] = (
+            _delta(current["vmstat"]["pgmajfault"], previous["vmstat"]["pgmajfault"]) / interval
+        )
+
+    return metrics
+
+
 def calculate_metrics(start, end, interval):
     metrics = {}
     metrics["timestamp"] = end["timestamp"]
@@ -217,8 +296,11 @@ def calculate_metrics(start, end, interval):
     metrics["uptime"] = end["proc.uptime"]["seconds"]
     metrics["cpu.loadavg.1min"] = end["proc.loadavg"]["1min"]
     metrics["cpu.loadavg.1min.previous"] = start["proc.loadavg"]["1min"]
-    metrics["cpu.run_queue"] = end["proc.stat"]["procs_running"]
-    metrics["cpu.run_queue_per_cpu"] = _pct(metrics["cpu.run_queue"], end["cpu.count"])
+
+    with contextlib.suppress(KeyError):
+        metrics["cpu.ctxt_per_sec"] = _delta(end["proc.stat"]["ctxt"], start["proc.stat"]["ctxt"]) / interval
+    if "procs_blocked" in end["proc.stat"]:
+        metrics["cpu.procs_blocked"] = end["proc.stat"]["procs_blocked"]
 
     # Self-measured collection cost of this tick (nanoseconds in raw, seconds here)
     metrics["collect.procfs_seconds"] = end["procfs_duration"] / 1e9
@@ -246,6 +328,17 @@ def calculate_metrics(start, end, interval):
         end["proc.meminfo"]["SwapTotal"] - end["proc.meminfo"]["SwapFree"],
         end["proc.meminfo"]["SwapTotal"],
     )
+
+    with contextlib.suppress(KeyError):
+        metrics["vm.swap_in_bytes_per_sec"] = (
+            _delta(end["proc.vmstat"]["pswpin"], start["proc.vmstat"]["pswpin"]) * _PAGE_SIZE / interval
+        )
+        metrics["vm.swap_out_bytes_per_sec"] = (
+            _delta(end["proc.vmstat"]["pswpout"], start["proc.vmstat"]["pswpout"]) * _PAGE_SIZE / interval
+        )
+        metrics["vm.major_faults_per_sec"] = (
+            _delta(end["proc.vmstat"]["pgmajfault"], start["proc.vmstat"]["pgmajfault"]) / interval
+        )
 
     _calculate_metrics_cpu(metrics, start, end, interval)
     _calculate_metrics_net(metrics, start, end, interval)

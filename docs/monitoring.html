@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Server monitoring for a small org - microSRE</title>
+  <meta name="description" content="An honest map of server monitoring tools for a small org - Netdata, the Prometheus stack, healthchecks.io, Uptime Kuma, Monit - where each fits, and when microSRE is the wrong tool.">
+  <meta property="og:title" content="Server monitoring for a small org">
+  <meta property="og:description" content="An honest map of the tools that fit a small org - including the one we make. Where each wins, and when microSRE is the wrong tool.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://microsre.io/monitoring.html">
+  <meta property="og:site_name" content="microSRE">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Server monitoring for a small org">
+  <meta name="twitter:description" content="An honest map of the tools that fit a small org - including the one we make. Where each wins, and when microSRE is the wrong tool.">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
+    .hero { background: #1a1a2e; color: #eee; padding: 4rem 0; }
+    .hero h1 { font-weight: 700; }
+    .hero .lead { color: #aaa; }
+    .section { padding: 3rem 0; }
+    .vs-card h3 { margin-bottom: 0.25rem; }
+    .vs-tag { color: #666; font-size: 0.95rem; margin-bottom: 1rem; }
+    .vs-wins { background: #f8f9fa; border-radius: 0.5rem; padding: 1.25rem; height: 100%; }
+    .vs-wins h4 { font-size: 1rem; }
+    .vs-wins ul { margin-bottom: 0; padding-left: 1.2rem; }
+    .vs-wins li { margin-bottom: 0.4rem; }
+    .pick { border-left: 4px solid #1a1a2e; background: #f8f9fa; padding: 1rem 1.25rem; border-radius: 0.25rem; }
+    .wrong { border-left: 4px solid #888; background: #f8f9fa; padding: 1.25rem 1.5rem; border-radius: 0.25rem; }
+    .byline { color: #666; font-size: 0.95rem; }
+    footer { background: #f8f9fa; padding: 2rem 0; color: #666; }
+    nav {
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      gap: 1.5rem;
+      align-items: baseline;
+      flex-wrap: wrap;
+      position: sticky; top: 0; z-index: 100;
+      background: #fff; border-bottom: 1px solid #e5e5e5; padding: 0.75rem 1.5rem;
+    }
+    nav a { color: inherit; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    nav .brand { font-weight: 700; margin-right: auto; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="index.html" class="brand">microSRE</a>
+    <a href="index.html">Home</a>
+    <a href="readme.html">Documentation</a>
+    <a href="pricing.html">Pricing</a>
+    <a href="monitoring.html">Guide</a>
+    <a href="index.html#saas">SaaS &#8599;</a>
+  </nav>
+
+  <section class="hero text-center">
+    <div class="container">
+      <h1>Server monitoring for a small org</h1>
+      <p class="lead">A small org doesn't need a monitoring platform. Here's an honest map<br>of what does the job - including the tool we make. Check our math.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <p>If you run a handful of servers - a VPS, a box in the office, something in a closet - you don't lack monitoring options, you lack a way to choose between them. This is the map we wish we'd had. The tools below are grouped by the job they do, not by feature lists, because that's how the choice actually goes: <strong>Netdata and Prometheus want to show you everything. healthchecks.io and Uptime Kuma answer liveness questions - did the job run, does the endpoint answer. Monit supervises processes.</strong> And microSRE, the tool we make, tries to do one narrow thing: tell you when a server needs you, fast, and stay out of the way the rest of the time.</p>
+      <p class="byline">Written by the microSRE author, who is obviously biased. Every "pick them if" below is meant seriously - if another tool fits your job better, take it. Spotted something stale or unfair? <a href="mailto:hello@microsre.io">hello@microsre.io</a>.</p>
+
+      <div class="wrong mt-4">
+        <h2 class="h4">First: when microSRE is the wrong tool</h2>
+        <p>Concessions up front, because that's the useful order:</p>
+        <ul class="mb-0">
+          <li>You want dashboards or historical graphs - take Netdata or Grafana.</li>
+          <li>You need per-second or per-application metrics: query latency, request rates, JVM stats. That's APM territory; microSRE won't get there.</li>
+          <li>You run Kubernetes-first fleets with autodiscovery and pod-level views.</li>
+          <li>You need automatic remediation - restarts, failover. microSRE tells you; systemd, monit, or your orchestrator do it.</li>
+          <li>You need compliance-grade long-term archival across years of full-resolution data.</li>
+        </ul>
+      </div>
+
+      <table class="table align-middle mt-4">
+        <thead>
+          <tr><th>Tool</th><th>Best at</th><th>Where microSRE fits instead</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Netdata</strong></td><td>Per-second dashboards, hundreds of app collectors</td><td>A few dozen health signals, minutes not seconds, tens of MB of RAM</td></tr>
+          <tr><td><strong>Prometheus + Grafana</strong></td><td>The standard metrics platform, scales to thousands</td><td>One binary, one config, no TSDB to run</td></tr>
+          <tr><td><strong>healthchecks.io</strong></td><td>Dead man's switches, done perfectly</td><td>Heartbeats plus the machine's actual health</td></tr>
+          <tr><td><strong>Uptime Kuma</strong></td><td>Self-hosted uptime + pretty status pages</td><td>Reachability isn't disk, memory, or pressure</td></tr>
+          <tr><td><strong>Monit</strong></td><td>Process supervision, restarts what dies</td><td>Modern signals, chat-native alerts</td></tr>
+          <tr><td><strong>Datadog-class SaaS</strong></td><td>APM, tracing, enterprise everything</td><td>Nothing leaves your machine by default</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section bg-light">
+    <div class="container">
+
+      <div class="vs-card mb-5">
+        <h3>Netdata</h3>
+        <p class="vs-tag">The closest in spirit: an open-source agent that collects locally and can skip the cloud.</p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="vs-wins">
+              <h4>Where Netdata wins</h4>
+              <ul>
+                <li><strong>Granularity.</strong> Per-second collection and per-app collectors - databases, web servers, containers, systemd services - where microSRE reads only the few dozen signals the kernel exposes in /proc.</li>
+                <li><strong>Dashboards.</strong> If your troubleshooting starts from a graph, Netdata's local dashboards are excellent. microSRE deliberately has none.</li>
+                <li><strong>Kubernetes.</strong> Helm charts, autodiscovery, container-aware views. microSRE is a per-host tool.</li>
+                <li><strong>Retention.</strong> Longer local history out of the box; microSRE keeps no metric history at all - it evaluates the current check against your thresholds. If you want trends, that's Netdata or Prometheus.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="vs-wins">
+              <h4>Where microSRE wins</h4>
+              <ul>
+                <li><strong>Footprint.</strong> Netdata's agent collects everything, all the time - RAM use reflects that. microSRE checks once a minute at a few tens of MB, and publishes its own cost in the metrics.</li>
+                <li><strong>Where it runs.</strong> microSRE reads /proc directly - no format-string parsing, no dependencies - so it works in rescue shells, minimal containers, and on a 512MB Pi Zero.</li>
+                <li><strong>Nothing to operate.</strong> Alerts go straight from your machine to Slack, Discord, or Telegram. No cloud account, no notification-agent config, no room full of charts to maintain.</li>
+                <li><strong>Pressure and OOM.</strong> PSI stall signals and OOM-kill events arrive in chat - no dashboard to configure first, nothing else to run.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <p class="pick mt-3"><strong>Pick Netdata if</strong> you want to watch graphs and drill into per-application behavior. <strong>Pick microSRE if</strong> you want to be told the moment it's time to log in - and not look at a dashboard the rest of the year.</p>
+      </div>
+
+      <div class="vs-card mb-5">
+        <h3>Prometheus + node_exporter + Grafana + Alertmanager</h3>
+        <p class="vs-tag">The industry standard. A stack of moving parts, not a program.</p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="vs-wins">
+              <h4>Where the stack wins</h4>
+              <ul>
+                <li><strong>Scale and queries.</strong> Thousands of hosts, years of history, PromQL - nothing else matches it for "show me CPU of fleet X versus last quarter".</li>
+                <li><strong>Ecosystem.</strong> Every exporter imaginable, dashboards for everything, battle-tested alerting.</li>
+                <li><strong>Ownership.</strong> You run it, you own the data, no vendor involved at all.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="vs-wins">
+              <h4>Where microSRE wins</h4>
+              <ul>
+                <li><strong>One static binary, one TOML file.</strong> No TSDB sizing, no retention policy, no Alertmanager routing trees, no Grafana to keep fed.</li>
+                <li><strong>No central server to run, feed, or keep reachable.</strong> Every host checks itself and alerts on its own - add a hundred machines and you've added zero infrastructure.</li>
+                <li><strong>Alerting without the ceremony.</strong> Threshold in config, message in chat. The whole alert path is one file you can read top to bottom.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <p class="pick mt-3"><strong>Pick the Prometheus stack if</strong> you have a platform team, real scale, or questions only a query language can answer. <strong>Pick microSRE if</strong> you have servers and a chat room, and the question is "are they okay?"</p>
+      </div>
+
+      <div class="vs-card mb-5">
+        <h3>healthchecks.io</h3>
+        <p class="vs-tag">Dead man's switches, perfected. Open source, self-hostable, generous free tier.</p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="vs-wins">
+              <h4>Where healthchecks.io wins</h4>
+              <ul>
+                <li><strong>Focus.</strong> "Did the job run?" is its entire world, and it does that one thing beautifully - grace periods, schedules, per-check channels.</li>
+                <li><strong>Maturity and integrations.</strong> A long list of ready notification integrations, a proven hosted service, and you can self-host it.</li>
+                <li><strong>Zero machine footprint on the monitored side.</strong> A curl in your cron job is all it takes.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="vs-wins">
+              <h4>Where microSRE wins</h4>
+              <ul>
+                <li><strong>Heartbeats are one knob, not the whole product.</strong> The same config that watches cron silence also watches memory, disk, pressure, and log error rates.</li>
+                <li><strong>Log-line heartbeats.</strong> Match a pattern in a log file, not just HTTP pings - batch jobs that only write files are covered.</li>
+                <li><strong>Local alerts, optional fleet.</strong> Alerts are generated on your machine; the hosted dead man's switch is opt-in, not the product.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <p class="pick mt-3"><strong>Pick healthchecks.io if</strong> all you need is "did the job run?" - genuinely, no hard feelings. <strong>Pick microSRE if</strong> the job's silence and the box's health are one question. The two compose fine; nobody stops you running both.</p>
+      </div>
+
+      <div class="vs-card mb-5">
+        <h3>Uptime Kuma</h3>
+        <p class="vs-tag">Self-hosted uptime monitoring with status pages and a big notification menu.</p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="vs-wins">
+              <h4>Where Kuma wins</h4>
+              <ul>
+                <li><strong>Status pages.</strong> Public incident communication built in - microSRE has nothing like it.</li>
+                <li><strong>Monitor variety.</strong> HTTP, TCP, ping, DNS, push, game servers - a long list of ways to ask "does it answer?"</li>
+                <li><strong>Nice UI, self-hosted, free.</strong> A pleasant dashboard you'll actually open.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="vs-wins">
+              <h4>Where microSRE wins</h4>
+              <ul>
+                <li><strong>Reachability isn't health.</strong> Kuma tells you the site answers; microSRE tells you the disk is 96% full, swap is thrashing, and the OOM killer just fired - before the site stops answering.</li>
+                <li><strong>Runs on the box itself.</strong> No separate monitor host needed; the agent lives on the machine it watches.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <p class="pick mt-3"><strong>Pick Kuma if</strong> you need public status pages or many protocol checks from one place. <strong>Pick microSRE if</strong> the 3am question is "why is it slow?" rather than "is it up?"</p>
+      </div>
+
+      <div class="vs-card mb-5">
+        <h3>Monit</h3>
+        <p class="vs-tag">The veteran. In every distro's repos for two decades, and it restarts what dies.</p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="vs-wins">
+              <h4>Where Monit wins</h4>
+              <ul>
+                <li><strong>Supervision.</strong> Monit restarts a crashed service. microSRE deliberately doesn't - it tells you, then you decide.</li>
+                <li><strong>Ubiquity and age.</strong> It's everywhere, it's tiny, and its config language is well understood by twenty years of admin answers online.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="vs-wins">
+              <h4>Where microSRE wins</h4>
+              <ul>
+                <li><strong>Modern signals.</strong> PSI pressure, OOM kills, log error rates, per-container docker logs - out of the box, not through a custom check program.</li>
+                <li><strong>Chat-native alerts.</strong> Slack, Discord, and Telegram webhooks auto-detected from the URL - no glue scripts to write.</li>
+                <li><strong>Optional fleet view.</strong> One place to see all your machines, if you want it.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <p class="pick mt-3"><strong>Pick monit if</strong> you want supervision with restart actions and email alerts. Plenty of boxes run both happily - monit restarts, microSRE explains.</p>
+      </div>
+
+      <div class="vs-card">
+        <h3>Datadog, New Relic, Grafana Cloud, and friends</h3>
+        <p class="vs-tag">The hosted platforms. Different league, different price.</p>
+        <p>APM, distributed tracing, RUM, log pipelines, per-host pricing that scales with ambition. If you have an on-call rotation and a monitoring line item in the budget, you already know these - and microSRE won't pretend to play in that league. The one-sentence contrast: those platforms move your data to them and charge you to look at it; <strong>microSRE sends nothing anywhere by default</strong>, and the hosted fleet view is summaries only, priced for fleets of pets, not herds of cattle.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <p>If your week is mostly "is the server okay - and tell me fast when it isn't" - that's the job microSRE is built for. Every other tool on this page is a better choice for its own job, and this page says so on purpose. <a href="readme.html">Read the documentation</a> or <a href="pricing.html">see the pricing</a>.</p>
+      <p class="text-muted small mt-4">Written October 2026. Features, free tiers, and prices change - verify on the vendors' sites before deciding, including ours.</p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container text-center">
+      <p>microSRE - <a href="https://github.com/aivarsk/microsre">GitHub</a> - Built for people who fix problems, not dashboards.</p>
+    </div>
+  </footer>
+</body>
+</html>

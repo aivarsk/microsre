@@ -34,12 +34,13 @@ def snapshot(**overrides):
             "SwapTotal": 0,
             "SwapFree": 0,
         },
-        "proc.stat": {"cpu": dict.fromkeys(CPU_FIELDS, 0), "procs_running": 0},
+        "proc.stat": {"cpu": dict.fromkeys(CPU_FIELDS, 0), "procs_running": 0, "procs_blocked": 0, "ctxt": 0},
         "proc.net.dev": {},
         "proc.net.snmp": {},
         "proc.net.netstat": {},
         "proc.mountinfo": {},
         "proc.diskstats": {},
+        "proc.vmstat": {},
         "oom": [],
         "logs": {},
         "docker-logs": {},
@@ -274,17 +275,27 @@ class TestStackedDevices(unittest.TestCase):
         self.assertFalse(_is_stacked(["unrelated2"], {"nvme0n1"}))
 
 
-class TestRunQueue(unittest.TestCase):
-    def test_raw_count_and_pct_of_cpu_count(self):
+class TestIntervalRates(unittest.TestCase):
+    def test_vmstat_rates_and_gauges(self):
+        start = snapshot(**{"proc.vmstat": {"pswpin": 1000, "pswpout": 2000, "pgmajfault": 500}})
         end = snapshot(
             **{
-                "proc.stat": {"cpu": dict.fromkeys(CPU_FIELDS, 0), "procs_running": 17},
-                "cpu.count": 8,
+                "proc.vmstat": {"pswpin": 1120, "pswpout": 1880, "pgmajfault": 560},
+                "proc.stat": {
+                    "cpu": dict.fromkeys(CPU_FIELDS, 0),
+                    "procs_running": 0,
+                    "procs_blocked": 3,
+                    "ctxt": 6100,
+                },
             }
         )
-        metrics = calculate_metrics(snapshot(), end, INTERVAL)
-        self.assertEqual(metrics["cpu.run_queue"], 17)
-        self.assertEqual(metrics["cpu.run_queue_per_cpu"], 212)
+        start["proc.stat"]["ctxt"] = 100
+        metrics = calculate_metrics(start, end, INTERVAL)
+        self.assertEqual(metrics["vm.swap_in_bytes_per_sec"], 120 * 4096 / INTERVAL)
+        self.assertEqual(metrics["vm.swap_out_bytes_per_sec"], 0)
+        self.assertEqual(metrics["vm.major_faults_per_sec"], 1)
+        self.assertEqual(metrics["cpu.ctxt_per_sec"], 100)
+        self.assertEqual(metrics["cpu.procs_blocked"], 3)
 
 
 class TestMemory(unittest.TestCase):

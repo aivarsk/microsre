@@ -248,7 +248,7 @@ class TestDaemon(unittest.TestCase):
                     payload = decode(request[2], request[1])
                     return (
                         payload.get("machine_id") == machine_id_path.read_text()
-                        and "cpu.run_queue" in payload.get("metrics", {})
+                        and "cpu.loadavg.1min" in payload.get("metrics", {})
                         and "raw" not in payload  # no log lines or /proc dumps leave the machine
                         and payload.get("alerts")
                         == [

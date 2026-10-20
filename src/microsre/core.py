@@ -11,6 +11,7 @@ import queue
 import selectors
 import syslog
 import threading
+import time
 import tomllib
 import urllib.error
 import uuid
@@ -175,6 +176,7 @@ class BackgroundWorker:
         self._pipe = os.pipe()
         self._selector = selectors.DefaultSelector()
         self._selector.register(self._pipe[0], selectors.EVENT_READ)
+        self._timers: list[list[Any]] = []
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
@@ -184,10 +186,36 @@ class BackgroundWorker:
 
         self.submit(register)
 
+    def every(self, seconds, func):
+        self._timers.append([time.monotonic() + seconds, seconds, func])
+        os.write(self._pipe[1], b"\0")
+
+    def _timeout(self):
+        if not self._timers:
+            return None
+        return max(min(timer[0] for timer in self._timers) - time.monotonic(), 0)
+
+    def _run_timers(self, now=None):
+        if now is None:
+            now = time.monotonic()
+        for timer in self._timers:
+            next_ts, seconds, func = timer
+            if now < next_ts:
+                continue
+            if now >= next_ts + seconds:
+                next_ts = now + seconds
+            else:
+                next_ts += seconds
+            timer[0] = next_ts
+            try:
+                func(now)
+            except Exception:
+                log.warning(f"Timer {func} failed", exc_info=True)
+
     def _run(self):
         stop = False
         while not stop:
-            for key, _ in self._selector.select():
+            for key, _ in self._selector.select(self._timeout()):
                 if key.data is None:
                     os.read(self._pipe[0], 4096)
                     continue
@@ -197,6 +225,7 @@ class BackgroundWorker:
                     handler(conn)
                 except Exception:
                     log.warning("Listener handler failed", exc_info=True)
+            self._run_timers()
             while True:
                 try:
                     func, args, kwargs, future = self._queue.get_nowait()
@@ -236,4 +265,5 @@ def ingest(kind, data):
         data["kind"] = kind
         data["uuid"] = str(uuid.uuid4())
         data["machine_id"] = machine_id()
+        data["version"] = APP_VERSION
         worker.submit(lambda: _post_compressed_json(url, data))

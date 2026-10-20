@@ -73,9 +73,9 @@ def dashboard(metrics, raw):
         raw["proc.loadavg"]["1min"],
         raw["proc.loadavg"]["5min"],
         raw["proc.loadavg"]["15min"],
-        "RunQ:",
-        metrics["cpu.run_queue"],
-        f"({metrics['cpu.run_queue_per_cpu']}%/cpu)",
+        "RunQ(max/1s):",
+        metrics.get("burst.cpu.max_procs_running"),
+        f"({int(metrics.get('burst.cpu.max_procs_running', 0) * 100 / (raw['cpu.count'] or 1))}%/cpu)",
     )
 
     _print_pressure(raw, "CPU pressure:", "proc.pressure.cpu")

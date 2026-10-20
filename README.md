@@ -38,4 +38,5 @@ Join the private beta: https://microsre.io/#saas
 
 - Website: https://microsre.io/
 - Documentation: https://microsre.io/readme.html
+- Choosing a monitoring tool? https://microsre.io/monitoring.html
 - GitHub: https://github.com/aivarsk/microsre

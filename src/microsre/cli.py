@@ -9,10 +9,11 @@ import traceback
 
 from microsre import prom, state
 from microsre.alert import configured_alerts
+from microsre.burst import BurstSampler
 from microsre.core import banner, config, ingest, log, worker
 from microsre.logreader import collect_logs, file_offsets, init_logs
 from microsre.metrics import calculate_metrics
-from microsre.procfs import collect_procfs, sample_procfs
+from microsre.procfs import collect_procfs
 from microsre.text import dashboard
 
 
@@ -97,6 +98,8 @@ def run_monitoring_loop(interval, daemon, on_tick):
     init_logs(fail=True, offsets=saved_offsets)
 
     with lifecycle(daemon) as stop:
+        sampler = BurstSampler(interval)
+        worker.every(1, sampler._tick)
         timer = time.monotonic()
         since = timestamp = time.time()
         previous = {}
@@ -107,7 +110,6 @@ def run_monitoring_loop(interval, daemon, on_tick):
             try:
                 timestamp = time.time()
                 now = time.monotonic()
-                merge_samples, samples_ready = sample_procfs()
                 current = {}
                 current.update(collect_procfs(timestamp))
 
@@ -116,11 +118,8 @@ def run_monitoring_loop(interval, daemon, on_tick):
                 since = next_since
                 state.save(file_offsets())
 
-                with contextlib.suppress(TimeoutError):
-                    samples_ready.result(timeout=1)
-                merge_samples(current)
-
                 metrics = calculate_metrics(previous, current, max(now - last, 1))
+                metrics.update(sampler.drain())
                 on_tick(metrics, current)
                 previous = current
                 last = now

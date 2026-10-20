@@ -7,8 +7,6 @@ import struct
 import time
 from typing import Any
 
-from microsre.core import worker
-
 
 def _read_bytes(path, max_size=256 * 1024):
     fd = os.open(path, os.O_RDONLY)
@@ -259,6 +257,15 @@ def _read_stat():
                 name.decode(),
                 dict(zip(("user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal"), fields)),
             )
+        elif name in (b"ctxt", b"procs_running", b"procs_blocked"):
+            yield name.decode(), int(rest)
+
+
+def _read_vmstat():
+    for line in _read_bytes("/proc/vmstat").splitlines():
+        name, _, value = line.partition(b" ")
+        if name in (b"pswpin", b"pswpout", b"pgmajfault"):
+            yield name.decode(), int(value)
 
 
 _PARTITION_SUFFIX = re.compile(r"(p?\d+)$")
@@ -413,27 +420,6 @@ def _read_self():
     }
 
 
-def _loadavg_runnable():
-    # runnable includes this process itself; it is not part of the queue
-    return max(0, int(_read_bytes("/proc/loadavg").split()[3].split(b"/")[0]) - 1)
-
-
-def sample_procfs():
-    samples = {"procs_running": 0}
-
-    def burst():
-        for _ in range(4):
-            time.sleep(0.05)
-            value = _loadavg_runnable()
-            if value > samples["procs_running"]:
-                samples["procs_running"] = value
-
-    def merge(raw):
-        raw["proc.stat"]["procs_running"] = max(_loadavg_runnable(), samples["procs_running"])
-
-    return merge, worker.submit(burst)
-
-
 def collect_procfs(now):
     start = time.monotonic_ns()
 
@@ -450,6 +436,7 @@ def collect_procfs(now):
     raw["proc.pressure.memory"] = dict(_read_pressure("memory"))
     raw["proc.pressure.io"] = dict(_read_pressure("io"))
     raw["proc.meminfo"] = dict(_read_meminfo())
+    raw["proc.vmstat"] = dict(_read_vmstat())
     raw["proc.diskstats"] = dict(_read_diskstats())
     raw["proc.net.dev"] = dict(_read_net_dev())
     raw["proc.net.snmp"] = dict(_read_net_kv("/proc/net/snmp", b"Tcp:"))
@@ -465,3 +452,14 @@ def collect_procfs(now):
     raw["procfs_duration"] = time.monotonic_ns() - start
 
     return raw
+
+
+def collect_burst_procfs():
+    return {
+        "stat": dict(_read_stat()),
+        "diskstats": dict(_read_diskstats()),
+        "net.dev": dict(_read_net_dev()),
+        "net.snmp": dict(_read_net_kv("/proc/net/snmp", b"Tcp:")),
+        "net.netstat": dict(_read_net_kv("/proc/net/netstat", b"TcpExt:")),
+        "vmstat": dict(_read_vmstat()),
+    }

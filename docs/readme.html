@@ -93,6 +93,7 @@
 
 <nav>
   <a href="/">← microSRE</a>
+  <a href="monitoring.html">Choosing a monitor</a>
 </nav>
 
 <h1>Documentation</h1>
@@ -300,12 +301,14 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr><td class="group" colspan="4">Memory</td></tr>
 <tr><td><code>mem.utilization_pct</code></td><td><code>/proc/meminfo</code></td><td>MemTotal, MemAvailable (used = total - available)</td><td>instantaneous</td></tr>
 <tr><td><code>mem.swap_utilization_pct</code></td><td><code>/proc/meminfo</code></td><td>SwapTotal, SwapFree</td><td>instantaneous</td></tr>
+<tr><td><code>vm.swap_in_bytes_per_sec, vm.swap_out_bytes_per_sec, vm.major_faults_per_sec</code></td><td><code>/proc/vmstat</code></td><td>pswpin, pswpout, pgmajfault diffs over the interval, swap rates in bytes; the interval view of burst.vm.max_*</td><td>integral (counter diff)</td></tr>
 <tr><td><code>mem.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/memory</code></td><td>some / full line, avg10 / avg60</td><td>instantaneous (kernel-windowed)</td></tr>
 <tr><td class="group" colspan="4">CPU</td></tr>
 <tr><td><code>cpu.utilization_pct, cpu.iowait_pct, cpu.steal_pct</code></td><td><code>/proc/stat</code></td><td>cpu line - user, nice, system, idle, iowait, irq, softirq, steal ticks, diffed over the interval</td><td>integral</td></tr>
 <tr><td><code>cpu.max_utilization_pct, cpu.max_utilization_core, cpu.&lt;core&gt;.utilization_pct</code></td><td><code>/proc/stat</code></td><td>cpuN per-core lines</td><td>integral</td></tr>
 <tr><td><code>cpu.loadavg.1min (+ .previous)</code></td><td><code>/proc/loadavg</code></td><td>1 min field</td><td>instantaneous (kernel-decayed)</td></tr>
-<tr><td><code>cpu.run_queue, cpu.run_queue_per_cpu</code></td><td><code>/proc/loadavg</code></td><td>runnable field (self excluded), max of 5 samples 50ms apart; per_cpu is a pct of cpu.count</td><td>instantaneous (burst max of 5)</td></tr>
+<tr><td><code>cpu.ctxt_per_sec</code></td><td><code>/proc/stat</code></td><td>context switches per second, averaged over the interval; the interval view of burst.cpu.max_ctxt_per_sec</td><td>integral (counter diff)</td></tr>
+<tr><td><code>cpu.procs_blocked</code></td><td><code>/proc/stat</code></td><td>tasks in uninterruptible (D) sleep at tick time; the interval view of burst.cpu.max_procs_blocked</td><td>instantaneous</td></tr>
 <tr><td><code>cpu.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/cpu</code></td><td>some / full line, avg10 / avg60</td><td>instantaneous (kernel-windowed)</td></tr>
 <tr><td class="group" colspan="4">Disk</td></tr>
 <tr><td><code>disk.space_usage_pct</code></td><td><code>/proc/self/mountinfo</code></td><td>per-mount statvfs bytes used / total; each device counted once</td><td>instantaneous</td></tr>
@@ -322,6 +325,13 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr><td><code>net.max.utilization_pct, net.max.utilization_iface</code></td><td><code>/proc/net/dev + /sys/class/net/&lt;iface&gt;/speed</code></td><td>max of rx/tx bytes x8 as % of link speed (unknown for virtual or link-down interfaces)</td><td>integral</td></tr>
 <tr><td><code>net.max.{rx,tx}_bytes_per_sec, net.max.{rx,tx}_iface</code></td><td><code>/proc/net/dev</code></td><td>busiest interface by bytes</td><td>integral</td></tr>
 <tr><td><code>net.&lt;iface&gt;.*</code></td><td><code>/proc/net/dev</code></td><td>per-interface counters, diffs over the check interval</td><td>integral; counter (errs, drop)</td></tr>
+<tr><td class="group" colspan="4">Burst</td></tr>
+<tr><td><code>burst.cpu.max_utilization_pct, burst.cpu.max_utilization_core, burst.cpu.max_steal_pct, burst.cpu.max_iowait_pct, burst.cpu.max_ctxt_per_sec, burst.cpu.max_procs_running, burst.cpu.max_procs_blocked</code></td><td><code>burst sampler: /proc/stat every second</code></td><td>worst second in the window: hottest core, steal, iowait, context switches, runnable and blocked task counts; procs_running excludes the sampler itself</td><td>max over 1s sub-intervals</td></tr>
+<tr><td><code>burst.disk.max_utilization_pct, burst.disk.max_utilization_device</code></td><td><code>burst sampler: /proc/diskstats every second</code></td><td>the busiest device-second in the window</td><td>max over 1s sub-intervals</td></tr>
+<tr><td><code>burst.net.tcp.max_retrans_per_sec, burst.net.tcp.max_listen_drops_per_sec, burst.net.tcp.max_listen_overflows_per_sec</code></td><td><code>burst sampler: /proc/net/snmp, /proc/net/netstat every second</code></td><td>worst second in the window for retransmits and listen queue drops</td><td>max over 1s sub-intervals</td></tr>
+<tr><td><code>burst.vm.max_swap_in_bytes_per_sec, burst.vm.max_swap_out_bytes_per_sec, burst.vm.max_major_faults_per_sec</code></td><td><code>burst sampler: /proc/vmstat every second</code></td><td>worst second in the window for swap in/out and major faults</td><td>max over 1s sub-intervals</td></tr>
+<tr><td><code>burst.disk.&lt;device&gt;.*, burst.net.&lt;iface&gt;.*</code></td><td><code>burst sampler: /proc/diskstats, /proc/net/dev every second</code></td><td>per-device and per-interface worst-second values</td><td>max over 1s sub-intervals</td></tr>
+<tr><td><code>burst.samples, burst.dropped</code></td><td><code>burst sampler</code></td><td>how many sub-samples the window maxima rest on; dropped counts samples overwritten when the main loop fell behind</td><td>counter</td></tr>
 <tr><td class="group" colspan="4">OOM kills</td></tr>
 <tr><td><code>oom.count, oom.victims</code></td><td><code>kernel log (auto-detected, no config)</code></td><td>OOM killer events</td><td>counter</td></tr>
 <tr><td class="group" colspan="4">Log sources</td></tr>
@@ -335,7 +345,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <h4>Caveats</h4>
 <ul>
 <li><strong>CPU:</strong> cpu.utilization_pct aggregates all cores - one hot core on a many-core host is hidden. Watch cpu.max_utilization_pct or the per-core cpu.&lt;core&gt;.utilization_pct.</li>
-<li><strong>CPU:</strong> cpu.run_queue is a burst sample (max of 5 reads 50ms apart), not a continuous measurement; sub-50ms spikes can slip through.</li>
+<li><strong>CPU:</strong> cpu.run_queue was retired in favor of burst.cpu.max_procs_running, the same signal at 1-second granularity: the old metric was a burst sample (max of 5 reads 50ms apart), not a continuous measurement, and sub-50ms spikes could slip through.</li>
 <li><strong>Memory:</strong> MemAvailable is a kernel heuristic about reclaimable memory, not a measurement of what applications can actually allocate.</li>
 <li><strong>Pressure:</strong> PSI avg10 is a windowed average of a windowed signal - it lags real stalls and smooths over short bursts (avg60 more so).</li>
 <li><strong>Disk:</strong> Stacked device-mapper/md devices are deduplicated - I/O is attributed to the backing disk; mapper-level views are not reported.</li>
@@ -343,6 +353,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <li><strong>Network:</strong> net.tcp.retrans_ratio_pct is meaningless while TcpOutSegs is near zero; net.tcp.listen_* need /proc/net/netstat, absent in some containers.</li>
 <li><strong>Log sources:</strong> The heartbeat last-seen time is persisted in state.sqlite and survives restarts. An edited heartbeat_pattern starts over (&#x27;not seen yet&#x27;), so a broken pattern surfaces within one interval instead of one threshold. A beat that landed while microsre was down for over ten minutes is missed and can alert once - it self-heals at the next beat.</li>
 <li><strong>CPU:</strong> Guest CPU time is included in cpu.utilization_pct: it sits inside the /proc/stat user field, only 8 fields are read, so nothing double-counts. iostat reports the same way; mpstat subtracts guest for its %usr column.</li>
+<li><strong>Burst:</strong> Burst metrics are the worst second of the tick window, measured by a background thread once per second. They are the 1-second-grain siblings of the 60-second cpu.max_*, disk.max.*, and net.max.* families. A window with no usable sub-samples simply has no burst.* keys: missing means &#x27;no data&#x27;, not &#x27;no spike&#x27;. And if burst.dropped climbs above zero, the main loop fell behind the sampler, which is worth knowing on its own.</li>
 <li><strong>Semantics:</strong> Metrics mix three semantics: integrals (CPU time, bytes - a burst smears across the window average), counters (retransmits, OOM kills, error lines - exact count in the window, no intra-window timing), and instantaneous samples (run queue, PSI, gauges - true at tick time; PSI is a kernel-windowed average on top). Size thresholds for the class: a 5-second spike can hide inside a calm 60-second integral, a counter sees the count but not the timing, and an instantaneous sample can miss the spike altogether.</li>
 </ul>
 <!-- metrics:table:end -->
@@ -499,6 +510,8 @@ chat_id = "-1001234567890"</code></pre>
   <img src="alert.jpg" alt="Telegram messages from microsre: a disk.space_usage_pct alert on host blackhole at 19:39 and a Recovered message seven minutes later">
   <figcaption>This is a real alert, from a real machine, on a real Saturday - delivered by the free local agent, straight from the server to Telegram. A scraping server hit 90% disk at 19:39; seven minutes of deleting old scrape data later, "Recovered."</figcaption>
 </figure>
+
+<p>Choosing between monitoring tools? There is an <a href="monitoring.html">honest map of the options</a> - Netdata, Prometheus, healthchecks.io, Uptime Kuma, Monit - including when microSRE is the wrong tool.</p>
 
 <hr>
 
