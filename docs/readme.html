@@ -124,7 +124,7 @@
 
 <p>Root or a regular user? While a regular user is enough, running under root may be a better choice when:
 <ul>
-  <li>You want to monitor logs of applications running in Docker containers. Under a regular user microSRE will have to call <code> docker logs --since</code> that becomes slow and IO-intensive for larger logfiles unless log rotation has been set up. When running under root, microSRE can access files directly and keep track of file offsets.</li>
+  <li>You want to monitor logs of applications running in Docker containers. microSRE reads the container JSON logs under <code>/var/lib/docker/containers</code> directly when they are readable by the current user, which on a standard install means root (the owner works under rootless Docker). Otherwise it falls back to <code>docker logs --since</code> through the docker socket (root or the docker group), which becomes slow and IO-intensive for larger logfiles unless log rotation has been set up. The direct path also keeps track of file offsets, so restarts pick up where they left off.</li>
   <li>You want to gain insight into network connections and files open by processes</li>
 </ul>
 </p>
@@ -198,7 +198,7 @@ systemctl --user start microsre</code></pre>
   <li><code>--snapshot [SECONDS]</code> - run in the foreground, print the metrics dashboard every N seconds (default 60). Alerts are evaluated and displayed, but nothing is sent.</li>
   <li><code>--daemon</code> - run the monitoring loop: check every <code>interval</code> seconds (default 60), send alerts, and report to the hosted view when <code>ingest_url</code> is set.</li>
   <li><code>--verify</code> - validate the configuration file: TOML syntax, webhook URL, alert rules, log sources, and template placeholders.</li>
-  <li><code>--version</code> - show the version and the locations of the config file, log file, and machine ID file.</li>
+  <li><code>--version</code> - show the version and the locations of the config file, log file, state file, and machine ID file.</li>
 </ul>
 
 <p>Run without arguments, <code>microsre</code> creates the default config file if it is missing and exits.</p>
@@ -220,6 +220,7 @@ systemctl --user start microsre</code></pre>
 
 <ul>
   <li>Log file: <code>/var/log/microsre/microsre.log</code> as root, <code>~/.local/state/microsre/microsre.log</code> as a regular user. Rotated at 10 MB, two backups kept.</li>
+  <li>State file: <code>/var/lib/microsre/state.sqlite</code> or <code>~/.local/state/microsre/state.sqlite</code>. A small SQLite database holding the read offsets of every log source and the last-seen times of heartbeat patterns, so a restart picks up where it left off. Offsets older than ten minutes are treated as stale on startup: sources tail to the end instead of catching up.</li>
   <li>Machine ID: <code>/var/lib/microsre/machine-id</code> or <code>~/.local/state/microsre/machine-id</code>. A random UUID that identifies this machine to the hosted view.</li>
 </ul>
 
@@ -501,7 +502,7 @@ heartbeat_pattern = "batch (done|finished)"</code></pre>
 line_pattern = "^\\d{4}-\\d{2}-\\d{2}"   # e.g. lines starting with a timestamp
 error_pattern = ".(ERROR|CRITICAL|FATAL)."</code></pre>
 
-<p>As root, microSRE reads the container JSON logs under <code>/var/lib/docker/containers</code> directly and keeps file offsets - cheap. As a regular user it falls back to <code>docker logs --since</code> on every check, which becomes slow and IO-intensive unless log rotation is set up. Docker Compose replica suffixes (<code>-1</code>, <code>_1</code>) are stripped, so <code>containers</code> lists service names. Metrics are reported per container as <code>docker-logs.&lt;name&gt;.*</code>. A stopped or removed container keeps reporting a tick with zero lines, so heartbeat ages keep growing and the dead man's switch still fires. In this direct-file mode, read positions are kept in <code>state.sqlite</code>: a restart within ten minutes of downtime picks up where it left off (heartbeat sources catch up on what they missed; other sources resume at the end of the log).</p>
+<p>When <code>/var/lib/docker/containers</code> is readable by the current user (root on a standard install, or the owner under rootless Docker), microSRE reads the container JSON logs directly and keeps file offsets - cheap. Otherwise it falls back to <code>docker logs --since</code> on every check, which needs the docker socket (root or the docker group) and becomes slow and IO-intensive unless log rotation is set up. Docker Compose replica suffixes (<code>-1</code>, <code>_1</code>) are stripped, so <code>containers</code> lists service names. Metrics are reported per container as <code>docker-logs.&lt;name&gt;.*</code>. A stopped or removed container keeps reporting a tick with zero lines, so heartbeat ages keep growing and the dead man's switch still fires. In this direct-file mode, read positions are kept in <code>state.sqlite</code>: a restart within ten minutes of downtime picks up where it left off (heartbeat sources catch up on what they missed; other sources resume at the end of the log).</p>
 
 <h3>Multiple log sources</h3>
 
