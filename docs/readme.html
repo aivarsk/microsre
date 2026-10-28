@@ -307,8 +307,10 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr class="fields"><td colspan="3">SwapTotal, SwapFree</td></tr>
 <tr><td><code>vm.swap_in_bytes_per_sec, vm.swap_out_bytes_per_sec, vm.major_faults_per_sec</code></td><td><code>/proc/vmstat</code></td><td>integral (counter diff)</td></tr>
 <tr class="fields"><td colspan="3">pswpin, pswpout, pgmajfault diffs over the interval, swap rates in bytes; the interval view of burst.vm.max_*</td></tr>
-<tr><td><code>mem.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/memory</code></td><td>instantaneous (kernel-windowed)</td></tr>
-<tr class="fields"><td colspan="3">some / full line, avg10 / avg60</td></tr>
+<tr><td><code>vm.scan_kswapd_per_sec, vm.scan_direct_per_sec, vm.allocstall_per_sec</code></td><td><code>/proc/vmstat</code></td><td>integral (counter diff)</td></tr>
+<tr class="fields"><td colspan="3">pgscan_kswapd, pgscan_direct, sum of allocstall_* diffs over the interval; kswapd scanning is background reclaim, direct scanning + alloc stalls are foreground reclaim that stalls tasks; the interval view of burst.vm.max_*</td></tr>
+<tr><td><code>mem.pressure.{some,full}.avg{10,60} (+ .previous), mem.pressure.{some,full}.pct</code></td><td><code>/proc/pressure/memory</code></td><td>pct: integral (counter diff); avg10/60: instantaneous (kernel-windowed)</td></tr>
+<tr class="fields"><td colspan="3">some / full line; avg10 / avg60 point samples (kernel-windowed, kept for compatibility); .pct = total counter diff over the interval, the exact stall share of the window; the interval view of burst.mem.pressure.*.max_pct</td></tr>
 <tr><td class="group" colspan="3">CPU</td></tr>
 <tr><td><code>cpu.utilization_pct, cpu.iowait_pct, cpu.steal_pct</code></td><td><code>/proc/stat</code></td><td>integral</td></tr>
 <tr class="fields"><td colspan="3">cpu line - user, nice, system, idle, iowait, irq, softirq, steal ticks, diffed over the interval</td></tr>
@@ -320,8 +322,8 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr class="fields"><td colspan="3">context switches per second, averaged over the interval; the interval view of burst.cpu.max_ctxt_per_sec</td></tr>
 <tr><td><code>cpu.procs_blocked</code></td><td><code>/proc/stat</code></td><td>instantaneous</td></tr>
 <tr class="fields"><td colspan="3">tasks in uninterruptible (D) sleep at tick time; the interval view of burst.cpu.max_procs_blocked</td></tr>
-<tr><td><code>cpu.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/cpu</code></td><td>instantaneous (kernel-windowed)</td></tr>
-<tr class="fields"><td colspan="3">some / full line, avg10 / avg60</td></tr>
+<tr><td><code>cpu.pressure.{some,full}.avg{10,60} (+ .previous), cpu.pressure.{some,full}.pct</code></td><td><code>/proc/pressure/cpu</code></td><td>pct: integral (counter diff); avg10/60: instantaneous (kernel-windowed)</td></tr>
+<tr class="fields"><td colspan="3">some / full line; avg10 / avg60 point samples (kernel-windowed, kept for compatibility); .pct = total counter diff over the interval, the exact stall share of the window; the interval view of burst.cpu.pressure.*.max_pct</td></tr>
 <tr><td class="group" colspan="3">Disk</td></tr>
 <tr><td><code>disk.space_usage_pct</code></td><td><code>/proc/self/mountinfo</code></td><td>instantaneous</td></tr>
 <tr class="fields"><td colspan="3">per-mount statvfs bytes used / total; each device counted once</td></tr>
@@ -331,8 +333,8 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr class="fields"><td colspan="3">sectors_read / sectors_written x 512-byte sectors (standard kernel units)</td></tr>
 <tr><td><code>disk.total.{read,write}_iops</code></td><td><code>/proc/diskstats</code></td><td>counter</td></tr>
 <tr class="fields"><td colspan="3">reads / writes completed</td></tr>
-<tr><td><code>disk.pressure.{some,full}.avg{10,60} (+ .previous)</code></td><td><code>/proc/pressure/io</code></td><td>instantaneous (kernel-windowed)</td></tr>
-<tr class="fields"><td colspan="3">some / full line, avg10 / avg60</td></tr>
+<tr><td><code>disk.pressure.{some,full}.avg{10,60} (+ .previous), disk.pressure.{some,full}.pct</code></td><td><code>/proc/pressure/io</code></td><td>pct: integral (counter diff); avg10/60: instantaneous (kernel-windowed)</td></tr>
+<tr class="fields"><td colspan="3">some / full line; avg10 / avg60 point samples (kernel-windowed, kept for compatibility); .pct = total counter diff over the interval, the exact stall share of the window; the interval view of burst.disk.pressure.*.max_pct</td></tr>
 <tr><td><code>disk.&lt;device&gt;.*</code></td><td><code>/proc/diskstats</code></td><td>integral; instantaneous (queue depth)</td></tr>
 <tr class="fields"><td colspan="3">per-device counters, diffs over the check interval</td></tr>
 <tr><td class="group" colspan="3">Network</td></tr>
@@ -351,16 +353,18 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <tr><td><code>net.&lt;iface&gt;.*</code></td><td><code>/proc/net/dev</code></td><td>integral; counter (errs, drop)</td></tr>
 <tr class="fields"><td colspan="3">per-interface counters, diffs over the check interval</td></tr>
 <tr><td class="group" colspan="3">Burst</td></tr>
-<tr><td><code>burst.cpu.max_utilization_pct, burst.cpu.max_utilization_core, burst.cpu.max_steal_pct, burst.cpu.max_iowait_pct, burst.cpu.max_ctxt_per_sec, burst.cpu.max_procs_running, burst.cpu.max_procs_blocked</code></td><td><code>burst sampler: /proc/stat every second</code></td><td>max over 1s sub-intervals</td></tr>
-<tr class="fields"><td colspan="3">worst second in the window: hottest core, steal, iowait, context switches, runnable and blocked task counts; procs_running excludes the sampler itself</td></tr>
+<tr><td><code>burst.cpu.utilization_pct, burst.cpu.max_utilization_pct, burst.cpu.max_utilization_core, burst.cpu.max_steal_pct, burst.cpu.max_iowait_pct, burst.cpu.max_system_pct, burst.cpu.max_ctxt_per_sec, burst.cpu.max_procs_running, burst.cpu.max_procs_blocked</code></td><td><code>burst sampler: /proc/stat every second</code></td><td>max over 1s sub-intervals</td></tr>
+<tr class="fields"><td colspan="3">worst second in the window: overall utilization, hottest core, steal, iowait, system share, context switches, runnable and blocked task counts; procs_running excludes the sampler itself</td></tr>
 <tr><td><code>burst.disk.max_utilization_pct, burst.disk.max_utilization_device</code></td><td><code>burst sampler: /proc/diskstats every second</code></td><td>max over 1s sub-intervals</td></tr>
 <tr class="fields"><td colspan="3">the busiest device-second in the window</td></tr>
 <tr><td><code>burst.net.tcp.max_retrans_per_sec, burst.net.tcp.max_listen_drops_per_sec, burst.net.tcp.max_listen_overflows_per_sec</code></td><td><code>burst sampler: /proc/net/snmp, /proc/net/netstat every second</code></td><td>max over 1s sub-intervals</td></tr>
 <tr class="fields"><td colspan="3">worst second in the window for retransmits and listen queue drops</td></tr>
-<tr><td><code>burst.vm.max_swap_in_bytes_per_sec, burst.vm.max_swap_out_bytes_per_sec, burst.vm.max_major_faults_per_sec</code></td><td><code>burst sampler: /proc/vmstat every second</code></td><td>max over 1s sub-intervals</td></tr>
-<tr class="fields"><td colspan="3">worst second in the window for swap in/out and major faults</td></tr>
+<tr><td><code>burst.vm.max_swap_in_bytes_per_sec, burst.vm.max_swap_out_bytes_per_sec, burst.vm.max_major_faults_per_sec, burst.vm.max_scan_kswapd_per_sec, burst.vm.max_scan_direct_per_sec, burst.vm.max_allocstall_per_sec</code></td><td><code>burst sampler: /proc/vmstat every second</code></td><td>max over 1s sub-intervals</td></tr>
+<tr class="fields"><td colspan="3">worst second in the window for swap in/out, major faults, and reclaim scanning (kswapd = background, direct + allocstall = foreground, task-stalling)</td></tr>
+<tr><td><code>burst.{mem,cpu,disk}.pressure.{some,full}.max_pct</code></td><td><code>burst sampler: /proc/pressure/{memory,cpu,io} every second</code></td><td>max over 1s sub-intervals (integral)</td></tr>
+<tr class="fields"><td colspan="3">worst second in the window: exact stall share of that second from total diffs (some = at least one task stalled, full = all non-idle tasks stalled); no kernel-window lag</td></tr>
 <tr><td><code>burst.disk.&lt;device&gt;.*, burst.net.&lt;iface&gt;.*</code></td><td><code>burst sampler: /proc/diskstats, /proc/net/dev every second</code></td><td>max over 1s sub-intervals</td></tr>
-<tr class="fields"><td colspan="3">per-device and per-interface worst-second values</td></tr>
+<tr class="fields"><td colspan="3">per-device and per-interface worst-second values (disk await included)</td></tr>
 <tr><td><code>burst.samples, burst.dropped</code></td><td><code>burst sampler</code></td><td>counter</td></tr>
 <tr class="fields"><td colspan="3">how many sub-samples the window maxima rest on; dropped counts samples overwritten when the main loop fell behind</td></tr>
 <tr><td class="group" colspan="3">OOM kills</td></tr>
@@ -383,7 +387,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
 <li><strong>CPU:</strong> cpu.utilization_pct aggregates all cores - one hot core on a many-core host is hidden. Watch cpu.max_utilization_pct or the per-core cpu.&lt;core&gt;.utilization_pct.</li>
 <li><strong>CPU:</strong> cpu.run_queue was retired in favor of burst.cpu.max_procs_running, the same signal at 1-second granularity: the old metric was a burst sample (max of 5 reads 50ms apart), not a continuous measurement, and sub-50ms spikes could slip through.</li>
 <li><strong>Memory:</strong> MemAvailable is a kernel heuristic about reclaimable memory, not a measurement of what applications can actually allocate.</li>
-<li><strong>Pressure:</strong> PSI avg10 is a windowed average of a windowed signal - it lags real stalls and smooths over short bursts (avg60 more so).</li>
+<li><strong>Pressure:</strong> PSI avg10 is a windowed average of a windowed signal - it lags real stalls and smooths over short bursts (avg60 more so). The .pct keys are total-counter diffs, the exact stall share of the interval, with no window lag; prefer them for alerting. burst.*.pressure.*.max_pct carries the same measure at 1-second grain.</li>
 <li><strong>Disk:</strong> Stacked device-mapper/md devices are deduplicated - I/O is attributed to the backing disk; mapper-level views are not reported.</li>
 <li><strong>Disk:</strong> Rates and percentages are counter diffs over the measured interval; a suspend or counter reset distorts one interval (clamped to 0, not fatal).</li>
 <li><strong>Network:</strong> net.tcp.retrans_ratio_pct is meaningless while TcpOutSegs is near zero; net.tcp.listen_* need /proc/net/netstat, absent in some containers.</li>

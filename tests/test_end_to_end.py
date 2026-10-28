@@ -142,6 +142,30 @@ class TestVerify(unittest.TestCase):
             self.assertIn("Invalid configuration file", result.stdout)
             self.assertNotIn("Traceback", result.stderr)
 
+    def test_alive_interval_below_minimum(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.verify(tmp, "alive_interval = 2\n\ntemplates = []\n\n[alerts]\n")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Invalid configuration file", result.stdout)
+            self.assertIn("Invalid alive_interval", result.stdout)
+            self.assertNotIn("Traceback", result.stderr)
+
+    def test_saas_cadence_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            saas = self.verify(
+                tmp,
+                'ingest_url = "http://127.0.0.1:9/ingest"\ninterval = 15\n\ntemplates = []\n\n[alerts]\n',
+            )
+            self.assertEqual(saas.returncode, 0, saas.stderr)
+            self.assertIn("Warning:", saas.stdout)
+            self.assertIn("60s floor", saas.stdout)
+            self.assertIn("Configuration file valid", saas.stdout)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            local = self.verify(tmp, "interval = 15\n\ntemplates = []\n\n[alerts]\n")
+            self.assertEqual(local.returncode, 0, local.stderr)
+            self.assertNotIn("Warning:", local.stdout)
+
     def test_heartbeat_alert_config_validates(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = self.verify(
@@ -331,6 +355,51 @@ class TestStaleOffsets(unittest.TestCase):
                         receiver.wait_for(lambda rs: any(kind_of(r, "stale_offsets") for r in rs), 30),
                         "no 'stale_offsets' event received",
                     )
+                finally:
+                    proc.send_signal(signal.SIGTERM)
+                    self.assertEqual(proc.wait(timeout=15), 0)
+        finally:
+            receiver.close()
+
+
+class TestAlivePing(unittest.TestCase):
+    def test_alive_events_arrive_on_their_own_cadence(self):
+        receiver = Receiver()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                # 20s ticks vs the 5s default alive cadence: the two must not interleave.
+                write_config(
+                    tmp,
+                    f'ingest_url = "http://127.0.0.1:{receiver.port}/ingest"\ninterval = 20\n\n'
+                    "templates = []\n\n[alerts]\n",
+                )
+
+                proc = start_microsre(tmp, ["--daemon"], stdout=subprocess.DEVNULL)
+                try:
+                    self.assertTrue(
+                        receiver.wait_for(
+                            lambda rs: sum(1 for r in rs if kind_of(r, "alive")) >= 4
+                            and sum(1 for r in rs if kind_of(r, "tick")) <= 2,
+                            45,
+                        ),
+                        "expected 4+ 'alive' events while at most 2 ticks arrived",
+                    )
+                    self.assertTrue(
+                        receiver.wait_for(lambda rs: any(kind_of(r, "tick") for r in rs), 30),
+                        "no 'tick' event received",
+                    )
+
+                    payloads = [decode(body, headers) for _, headers, body in receiver.requests]
+                    kinds = [payload.get("kind") for payload in payloads]
+                    self.assertLess(kinds.index("alive"), kinds.index("tick"))  # first alive precedes first tick
+                    alive = payloads[kinds.index("alive")]
+                    self.assertTrue(alive.get("machine_id"))
+                    self.assertIn("uuid", alive)
+                    self.assertGreater(alive.get("uptime", 0), 0)  # seconds since boot, for restart vs wedge
+                    self.assertNotIn("metrics", alive)  # liveness only, no metric payload
+
+                    log_text = (Path(tmp) / "state" / "microsre" / "microsre.log").read_text()
+                    self.assertIn("60s floor", log_text)  # startup cadence warning reached the log
                 finally:
                     proc.send_signal(signal.SIGTERM)
                     self.assertEqual(proc.wait(timeout=15), 0)

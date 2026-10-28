@@ -13,7 +13,7 @@ from microsre.burst import BurstSampler
 from microsre.core import banner, config, ingest, log, worker
 from microsre.logreader import collect_logs, file_offsets, init_logs
 from microsre.metrics import calculate_metrics
-from microsre.procfs import collect_procfs
+from microsre.procfs import collect_procfs, uptime_seconds
 from microsre.text import dashboard
 
 
@@ -74,15 +74,30 @@ def on_tick_snapshot(metrics, raw):
     print(flush=True)
 
 
-def _check_interval(interval):
+def _check_interval(name, interval):
     if not isinstance(interval, int) or interval < 5:
-        raise ValueError(f"Invalid interval {interval!r}, expected an int of at least 5 seconds")
+        raise ValueError(f"Invalid {name} {interval!r}, expected an int of at least 5 seconds")
+    return interval
+
+
+def _saas_cadence_note(interval):
+    # Fixed SaaS plans accept one tick per 60s; faster cadence needs a custom plan.
+    if interval < 60 and config().get("ingest_url"):
+        return (
+            f"interval {interval}s is under the SaaS 60s floor for fixed plans; "
+            "over-cadence ticks are dropped at ingest unless the plan allows them"
+        )
+    return None
 
 
 def run_monitoring_loop(interval, daemon, on_tick):
     # The unattended loop gets a floor; foreground --snapshot sets its own pace.
     if daemon:
-        _check_interval(interval)
+        _check_interval("interval", interval)
+        cadence_note = _saas_cadence_note(interval)
+        if cadence_note:
+            log.warning(cadence_note)
+    alive_every = _check_interval("alive_interval", config().get("alive_interval", 5))
 
     # Offsets from a recent-enough shutdown let heartbeat sources catch up.
     # Invalid log configuration refuses to start: a silently dropped source
@@ -99,7 +114,17 @@ def run_monitoring_loop(interval, daemon, on_tick):
 
     with lifecycle(daemon) as stop:
         sampler = BurstSampler(interval)
-        worker.every(1, sampler._tick)
+        ticks = 0
+
+        # Alive pings ride the burst sampler's 1s timer, so a wedged main loop can't stall them.
+        def sampler_tick(now):
+            nonlocal ticks
+            sampler._tick(now)
+            ticks += 1
+            if ticks % alive_every == 0:
+                ingest("alive", {"uptime": uptime_seconds()})
+
+        worker.every(1, sampler_tick)
         timer = time.monotonic()
         since = timestamp = time.time()
         previous = {}
@@ -163,7 +188,11 @@ def main():
             init_logs(fail=True)
             configured_alerts(fail=True)
             prom.parse_listen(config())
-            _check_interval(config().get("interval", 60))
+            _check_interval("interval", config().get("interval", 60))
+            _check_interval("alive_interval", config().get("alive_interval", 5))
+            cadence_note = _saas_cadence_note(config().get("interval", 60))
+            if cadence_note:
+                print(f"Warning: {cadence_note}")
             print("Configuration file valid")
         except Exception as exc:
             print(f"Invalid configuration file: {exc!r}")

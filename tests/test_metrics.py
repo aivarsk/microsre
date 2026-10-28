@@ -297,6 +297,68 @@ class TestIntervalRates(unittest.TestCase):
         self.assertEqual(metrics["cpu.ctxt_per_sec"], 100)
         self.assertEqual(metrics["cpu.procs_blocked"], 3)
 
+    def test_reclaim_counters_report_background_and_foreground(self):
+        start = snapshot(
+            **{
+                "proc.vmstat": {
+                    "pswpin": 0,
+                    "pswpout": 0,
+                    "pgmajfault": 0,
+                    "pgscan_kswapd": 4000,
+                    "pgscan_direct": 100,
+                    "allocstall_normal": 10,
+                    "allocstall_dma32": 2,
+                }
+            }
+        )
+        end = snapshot(
+            **{
+                "proc.vmstat": {
+                    "pswpin": 0,
+                    "pswpout": 0,
+                    "pgmajfault": 0,
+                    "pgscan_kswapd": 4600,
+                    "pgscan_direct": 400,
+                    "allocstall_normal": 13,
+                    "allocstall_dma32": 4,
+                }
+            }
+        )
+        metrics = calculate_metrics(start, end, INTERVAL)
+        self.assertEqual(metrics["vm.scan_kswapd_per_sec"], 600 / INTERVAL)
+        self.assertEqual(metrics["vm.scan_direct_per_sec"], 300 / INTERVAL)
+        self.assertEqual(metrics["vm.allocstall_per_sec"], 5 / INTERVAL)
+
+    def test_pressure_pct_is_the_exact_interval_stall_share(self):
+        def pressure(some_us, full_us):
+            return {
+                "some": {"avg10": 0.0, "avg60": 0.0, "avg300": 0.0, "total": some_us},
+                "full": {"avg10": 0.0, "avg60": 0.0, "avg300": 0.0, "total": full_us},
+            }
+
+        start = snapshot(
+            **{
+                "proc.pressure.memory": pressure(1_000_000, 2_000_000),
+                "proc.pressure.cpu": pressure(0, 0),
+                "proc.pressure.io": pressure(0, 0),
+            }
+        )
+        end = snapshot(
+            **{
+                "proc.pressure.memory": pressure(4_000_000, 5_000_000),
+                "proc.pressure.cpu": pressure(100_000, 0),
+                "proc.pressure.io": pressure(0, 0),
+            }
+        )
+        metrics = calculate_metrics(start, end, INTERVAL)
+        # 3 s of 'some' and 1 s of 'full' memory stall across the 60 s window
+        self.assertEqual(metrics["mem.pressure.some.pct"], 5.0)
+        self.assertEqual(metrics["mem.pressure.full.pct"], 5.0)
+        self.assertEqual(metrics["cpu.pressure.some.pct"], 0.2)
+        # avg keys stay for compatibility; pct has no .previous (unknowable from two snapshots)
+        self.assertEqual(metrics["mem.pressure.full.avg10"], 0.0)
+        self.assertFalse(any(key.endswith(".pct.previous") for key in metrics))
+
 
 class TestMemory(unittest.TestCase):
     def test_used_is_total_minus_available(self):

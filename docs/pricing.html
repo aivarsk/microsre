@@ -85,18 +85,18 @@
 
       <table class="table bg-white align-middle">
         <thead>
-          <tr><th>Plan</th><th>Servers</th><th>Retention</th><th>Price</th></tr>
+          <tr><th>Plan</th><th>Servers</th><th>Retention</th><th>Cadence</th><th>Price</th></tr>
         </thead>
         <tbody>
-          <tr><td>Trial</td><td>5</td><td>7 days</td><td>free, 30 days</td></tr>
-          <tr><td>Solo</td><td>5</td><td>14 days</td><td>$9/mo</td></tr>
-          <tr><td>Studio</td><td>20</td><td>30 days</td><td>$29/mo</td></tr>
-          <tr><td>Small org</td><td>50</td><td>90 days</td><td>$59/mo</td></tr>
-          <tr><td>Beyond 50</td><td>custom</td><td>custom</td><td>per-server</td></tr>
+          <tr><td>Trial</td><td>5</td><td>7 days</td><td>60s</td><td>free, 30 days</td></tr>
+          <tr><td>Solo</td><td>5</td><td>14 days</td><td>60s</td><td>$9/mo</td></tr>
+          <tr><td>Studio</td><td>20</td><td>30 days</td><td>60s</td><td>$29/mo</td></tr>
+          <tr><td>Small org</td><td>50</td><td>90 days</td><td>60s</td><td>$59/mo</td></tr>
+          <tr><td>Beyond 50</td><td>custom</td><td>custom</td><td>custom</td><td>per-server</td></tr>
         </tbody>
       </table>
 
-      <p class="text-muted small">Prices are what we plan to ship; they are final when billing opens. The trial is the Solo plan with shorter retention. When it ends, pick a plan or walk away - the agent and its local alerts keep working either way.</p>
+      <p class="text-muted small">Cadence is how often a machine checks in. The hosted view accepts one tick per minute per machine - the agent's default interval, so nothing changes on your side. Faster cadence (15s) is a real cost multiplier (4x the ingest and storage churn), so it stays a custom-plan knob; if your tail is chatty, talk to us. Ticks posted faster than the plan accepts are dropped at ingest, not queued. Prices and limits are what we plan to ship; they are final when billing opens. The trial is the Solo plan with shorter retention. When it ends, pick a plan or walk away - the agent and its local alerts keep working either way.</p>
 
       <h3 class="mt-5">Join the private beta</h3>
       <p>Waitlist signups are the beta cohort: early access to the hosted view while it takes shape, free during the beta. One email when it opens, no newsletter.</p>

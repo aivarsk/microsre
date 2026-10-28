@@ -205,6 +205,10 @@ def _read_uptime():
     yield "idle_seconds", float(fields[1])
 
 
+def uptime_seconds():
+    return dict(_read_uptime())["seconds"]
+
+
 def _read_loadavg():
     fields = _read_bytes("/proc/loadavg").split()
     yield "1min", float(fields[0])
@@ -264,7 +268,9 @@ def _read_stat():
 def _read_vmstat():
     for line in _read_bytes("/proc/vmstat").splitlines():
         name, _, value = line.partition(b" ")
-        if name in (b"pswpin", b"pswpout", b"pgmajfault"):
+        if name in (b"pswpin", b"pswpout", b"pgmajfault", b"pgscan_kswapd", b"pgscan_direct") or name.startswith(
+            b"allocstall_"
+        ):
             yield name.decode(), int(value)
 
 
@@ -462,4 +468,7 @@ def collect_burst_procfs():
         "net.snmp": dict(_read_net_kv("/proc/net/snmp", b"Tcp:")),
         "net.netstat": dict(_read_net_kv("/proc/net/netstat", b"TcpExt:")),
         "vmstat": dict(_read_vmstat()),
+        "pressure.cpu": dict(_read_pressure("cpu")),
+        "pressure.memory": dict(_read_pressure("memory")),
+        "pressure.io": dict(_read_pressure("io")),
     }

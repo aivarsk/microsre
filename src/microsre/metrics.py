@@ -33,6 +33,21 @@ def _cpu_line_pct(fields, previous):
     return int(active * 100 / total), int(delta["steal"] * 100 / total), int(delta["iowait"] * 100 / total)
 
 
+def _cpu_field_pct(fields, previous, field):
+    delta = {f: _delta(fields[f], previous[f]) for f in _CPU_FIELDS}
+    total = sum(delta[f] for f in _CPU_TOTAL)
+    if not total:
+        return 0
+    return int(delta[field] * 100 / total)
+
+
+def _allocstall_per_sec(current, previous, interval):
+    stalls = [k for k in current if k.startswith("allocstall_")]
+    if not stalls:
+        return None
+    return sum(_delta(current[k], previous.get(k, 0)) for k in stalls) / interval
+
+
 def _disk_utilization_pct(previous, current, interval):
     return _delta(current["time_in_progress"], previous["time_in_progress"]) * 100 / (interval * 1000)
 
@@ -221,6 +236,8 @@ def calculate_burst_metrics(previous, current, interval):
 
     with contextlib.suppress(KeyError):
         metrics["cpu.max_ctxt_per_sec"] = _delta(stat["ctxt"], prev_stat["ctxt"]) / interval
+    with contextlib.suppress(KeyError):
+        metrics["cpu.utilization_pct"] = _cpu_line_pct(stat["cpu"], prev_stat["cpu"])[0]
     if "procs_running" in stat:
         metrics["cpu.max_procs_running"] = max(0, stat["procs_running"] - 1)
     if "procs_blocked" in stat:
@@ -231,13 +248,14 @@ def calculate_burst_metrics(previous, current, interval):
         if name == "cpu" or not name.startswith("cpu") or name not in prev_stat:
             continue
         utilization, steal, iowait = _cpu_line_pct(fields, prev_stat[name])
-        per_core.append((utilization, steal, iowait, name))
+        per_core.append((utilization, steal, iowait, _cpu_field_pct(fields, prev_stat[name], "system"), name))
     if per_core:
         hottest = max(per_core, key=lambda core: core[0])
         metrics["cpu.max_utilization_pct"] = hottest[0]
-        metrics["cpu.max_utilization_core"] = hottest[3]
+        metrics["cpu.max_utilization_core"] = hottest[4]
         metrics["cpu.max_steal_pct"] = max(core[1] for core in per_core)
         metrics["cpu.max_iowait_pct"] = max(core[2] for core in per_core)
+        metrics["cpu.max_system_pct"] = max(core[3] for core in per_core)
 
     utils = []
     for name, fields in current["diskstats"].items():
@@ -246,6 +264,11 @@ def calculate_burst_metrics(previous, current, interval):
             continue
         metrics[f"disk.{name}.utilization_pct"] = _disk_utilization_pct(prev, fields, interval)
         metrics[f"disk.{name}.queue_depth"] = fields["in_progress"]
+        with contextlib.suppress(KeyError, ZeroDivisionError):
+            metrics[f"disk.{name}.await_ms"] = (
+                _delta(fields["time_reading"], prev["time_reading"])
+                + _delta(fields["time_writing"], prev["time_writing"])
+            ) / (_delta(fields["reads"], prev["reads"]) + _delta(fields["writes"], prev["writes"]))
         metrics[f"disk.{name}.read_bytes_per_sec"] = (
             _delta(fields["sectors_read"], prev["sectors_read"]) * 512 / interval
         )
@@ -281,10 +304,25 @@ def calculate_burst_metrics(previous, current, interval):
     ):
         with contextlib.suppress(KeyError):
             metrics[metric] = _delta(current["vmstat"][key], previous["vmstat"][key]) * _PAGE_SIZE / interval
+    for key, metric in (
+        ("pgscan_kswapd", "vm.max_scan_kswapd_per_sec"),
+        ("pgscan_direct", "vm.max_scan_direct_per_sec"),
+    ):
+        with contextlib.suppress(KeyError):
+            metrics[metric] = _delta(current["vmstat"][key], previous["vmstat"][key]) / interval
     with contextlib.suppress(KeyError):
         metrics["vm.max_major_faults_per_sec"] = (
             _delta(current["vmstat"]["pgmajfault"], previous["vmstat"]["pgmajfault"]) / interval
         )
+    stalls = _allocstall_per_sec(current.get("vmstat", {}), previous.get("vmstat", {}), interval)
+    if stalls is not None:
+        metrics["vm.max_allocstall_per_sec"] = stalls
+
+    for prefix, file in (("mem", "pressure.memory"), ("cpu", "pressure.cpu"), ("disk", "pressure.io")):
+        for tag in ("some", "full"):
+            with contextlib.suppress(KeyError):
+                stall_us = _delta(current[file][tag]["total"], previous[file][tag]["total"])
+                metrics[f"{prefix}.pressure.{tag}.max_pct"] = round(stall_us * 100 / (interval * 1_000_000), 1)
 
     return metrics
 
@@ -330,15 +368,15 @@ def calculate_metrics(start, end, interval):
     )
 
     with contextlib.suppress(KeyError):
-        metrics["vm.swap_in_bytes_per_sec"] = (
-            _delta(end["proc.vmstat"]["pswpin"], start["proc.vmstat"]["pswpin"]) * _PAGE_SIZE / interval
-        )
-        metrics["vm.swap_out_bytes_per_sec"] = (
-            _delta(end["proc.vmstat"]["pswpout"], start["proc.vmstat"]["pswpout"]) * _PAGE_SIZE / interval
-        )
-        metrics["vm.major_faults_per_sec"] = (
-            _delta(end["proc.vmstat"]["pgmajfault"], start["proc.vmstat"]["pgmajfault"]) / interval
-        )
+        vmstat, prev_vmstat = end["proc.vmstat"], start["proc.vmstat"]
+        metrics["vm.swap_in_bytes_per_sec"] = _delta(vmstat["pswpin"], prev_vmstat["pswpin"]) * _PAGE_SIZE / interval
+        metrics["vm.swap_out_bytes_per_sec"] = _delta(vmstat["pswpout"], prev_vmstat["pswpout"]) * _PAGE_SIZE / interval
+        metrics["vm.major_faults_per_sec"] = _delta(vmstat["pgmajfault"], prev_vmstat["pgmajfault"]) / interval
+        metrics["vm.scan_kswapd_per_sec"] = _delta(vmstat["pgscan_kswapd"], prev_vmstat["pgscan_kswapd"]) / interval
+        metrics["vm.scan_direct_per_sec"] = _delta(vmstat["pgscan_direct"], prev_vmstat["pgscan_direct"]) / interval
+        stalls = _allocstall_per_sec(vmstat, prev_vmstat, interval)
+        if stalls is not None:
+            metrics["vm.allocstall_per_sec"] = stalls
 
     _calculate_metrics_cpu(metrics, start, end, interval)
     _calculate_metrics_net(metrics, start, end, interval)
@@ -350,6 +388,10 @@ def calculate_metrics(start, end, interval):
                 for avg in ("avg10", "avg60"):
                     metrics[f"{prefix}.pressure.{tag}.{avg}"] = end[f"proc.pressure.{file}"][tag][avg]
                     metrics[f"{prefix}.pressure.{tag}.{avg}.previous"] = start[f"proc.pressure.{file}"][tag][avg]
+                stall_us = _delta(
+                    end[f"proc.pressure.{file}"][tag]["total"], start[f"proc.pressure.{file}"][tag]["total"]
+                )
+                metrics[f"{prefix}.pressure.{tag}.pct"] = round(stall_us * 100 / (interval * 1_000_000), 1)
 
     ooms = end["oom"]
     for oom in ooms:
