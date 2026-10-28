@@ -9,6 +9,9 @@
 # Seconds between checks in daemon mode (minimum 5)
 interval = 60
 
+# Seconds between "alive" liveness pings to the SaaS (minimum 5, sent only when ingest_url is set)
+# alive_interval = 5
+
 # No webhook_url - no chat alerts (they still go to the system log).
 # webhook_url = "https://hooks.slack.com/services/..."
 # or: webhook_url = "https://discord.com/api/webhooks/..."

@@ -235,6 +235,9 @@ systemctl --user start microsre</code></pre>
 # Seconds between checks in daemon mode
 interval = 60
 
+# Seconds between "alive" liveness pings to the SaaS (minimum 5, sent only when ingest_url is set)
+# alive_interval = 5
+
 # Where alerts go (optional). Slack, Discord and Telegram webhook URLs are
 # auto-detected from the URL; any other URL gets a plain JSON POST with a
 # "text" field. No webhook_url - no chat alerts (they still go to the system log).
@@ -279,6 +282,7 @@ Investigate: `microsre --snapshot` (live view), `vmstat 1` (runnable/blocked, sw
   <li><code>ingest_url</code> - report metrics and alerts to the microsre.io hosted view. See <a href="#fleet">Fleet / SaaS</a>.</li>
   <li><code>prometheus_listen</code> - optional <code>"host:port"</code> to expose all metrics in Prometheus text format at <code>/metrics</code>. Off by default; daemon mode only.</li>
   <li><code>interval</code> - seconds between checks in daemon mode. Default 60; values below 5 are rejected. With a shorter interval, alert <code>duration</code> values stay in seconds and need no re-tuning.</li>
+  <li><code>alive_interval</code> - seconds between "alive" liveness pings to the hosted view, sent independently of <code>interval</code> so a stalled collector is still visible between ticks. Only sent when <code>ingest_url</code> is set. Default 5; values below 5 are rejected.</li>
 </ul>
 
 <h3>Alert rules - <code>[alerts]</code></h3>
