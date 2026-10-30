@@ -6,11 +6,12 @@ import sys
 import threading
 import time
 import traceback
+from urllib.parse import urlparse
 
 from microsre import prom, state
-from microsre.alert import configured_alerts
+from microsre.alert import configured_alerts, send_configured_notification
 from microsre.burst import BurstSampler
-from microsre.core import banner, config, ingest, log, worker
+from microsre.core import banner, config, ingest, log, post_ingest, worker
 from microsre.logreader import collect_logs, file_offsets, init_logs
 from microsre.metrics import calculate_metrics
 from microsre.procfs import collect_procfs, uptime_seconds
@@ -179,6 +180,11 @@ def main():
         action="store_true",
         help="Verify configuration file",
     )
+    parser.add_argument(
+        "--notify",
+        metavar="MESSAGE",
+        help="Send MESSAGE through the configured notification channel and exit",
+    )
 
     args = parser.parse_args()
 
@@ -190,6 +196,10 @@ def main():
             prom.parse_listen(config())
             _check_interval("interval", config().get("interval", 60))
             _check_interval("alive_interval", config().get("alive_interval", 5))
+            if url := config().get("ingest_url"):
+                if not post_ingest("alive", {"uptime": uptime_seconds()}):
+                    raise ValueError("ingest_url did not accept an alive event, see the log for details")
+                print(f"alive event accepted by {urlparse(url).hostname}")
             cadence_note = _saas_cadence_note(config().get("interval", 60))
             if cadence_note:
                 print(f"Warning: {cadence_note}")
@@ -197,6 +207,9 @@ def main():
         except Exception as exc:
             print(f"Invalid configuration file: {exc!r}")
             sys.exit(1)
+    elif args.notify is not None:
+        config()
+        notify_or_exit(args.notify)
     elif args.version:
         banner()
     elif args.snapshot is not None:
@@ -215,3 +228,13 @@ def run_or_exit(interval, daemon, on_tick):
     except Exception as exc:
         print(f"Cannot start: {exc!r}")
         sys.exit(1)
+
+
+def notify_or_exit(message):
+    if not config().get("webhook_url"):
+        print("Cannot send: webhook_url is not set in the configuration file")
+        sys.exit(1)
+    if send_configured_notification(message) is None:
+        print("Delivery failed, see the log for details")
+        sys.exit(1)
+    print("Notification sent")

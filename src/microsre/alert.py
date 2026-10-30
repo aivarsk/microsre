@@ -43,13 +43,13 @@ def send_notification(webhook_url, text, **kwargs):
             "username": kwargs.get("username") or APP_NAME,
         }
 
-    _post_json(webhook_url, payload)
+    return _post_json(webhook_url, payload)
 
 
-def _send_notification(text):
+def send_configured_notification(text):
     c = config()
     if webhook_url := c.get("webhook_url"):
-        send_notification(webhook_url, text, username=c.get("username"), chat_id=c.get("chat_id"))
+        return send_notification(webhook_url, text, username=c.get("username"), chat_id=c.get("chat_id"))
 
 
 class MetricsFormatter(string.Formatter):
@@ -132,14 +132,14 @@ class AlertState:
             syslog.LOG_ALERT,
             f"{context['metric.name']} is {context['metric.value']} for {context['metric.duration']}s",
         )
-        worker.submit(lambda: _send_notification(message))
+        worker.submit(lambda: send_configured_notification(message))
 
     def _send_recovery(self, context):
         if self._dryrun:
             return
         message = "Recovered: " + self.formatter.vformat(self.template_title, (), context)
         syslog.syslog(syslog.LOG_ALERT, f"{context['metric.name']} has recovered")
-        worker.submit(lambda: _send_notification(message))
+        worker.submit(lambda: send_configured_notification(message))
 
     def _context(self, metrics, value):
         context = metrics.copy()

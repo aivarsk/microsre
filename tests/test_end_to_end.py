@@ -3,6 +3,7 @@ import json
 import os
 import select
 import signal
+import socket
 import sqlite3
 import stat
 import subprocess
@@ -151,20 +152,59 @@ class TestVerify(unittest.TestCase):
             self.assertNotIn("Traceback", result.stderr)
 
     def test_saas_cadence_warning(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            saas = self.verify(
-                tmp,
-                'ingest_url = "http://127.0.0.1:9/ingest"\ninterval = 15\n\ntemplates = []\n\n[alerts]\n',
-            )
-            self.assertEqual(saas.returncode, 0, saas.stderr)
-            self.assertIn("Warning:", saas.stdout)
-            self.assertIn("60s floor", saas.stdout)
-            self.assertIn("Configuration file valid", saas.stdout)
+        receiver = Receiver()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                saas = self.verify(
+                    tmp,
+                    f'ingest_url = "http://127.0.0.1:{receiver.port}/ingest"\ninterval = 15\n\n'
+                    "templates = []\n\n[alerts]\n",
+                )
+                self.assertEqual(saas.returncode, 0, saas.stderr)
+                self.assertIn("Warning:", saas.stdout)
+                self.assertIn("60s floor", saas.stdout)
+                self.assertIn("alive event accepted", saas.stdout)
+                self.assertIn("Configuration file valid", saas.stdout)
+        finally:
+            receiver.close()
 
         with tempfile.TemporaryDirectory() as tmp:
             local = self.verify(tmp, "interval = 15\n\ntemplates = []\n\n[alerts]\n")
             self.assertEqual(local.returncode, 0, local.stderr)
             self.assertNotIn("Warning:", local.stdout)
+
+    def test_verify_sends_alive_and_reports_acceptance(self):
+        receiver = Receiver()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                result = self.verify(
+                    tmp,
+                    f'ingest_url = "http://127.0.0.1:{receiver.port}/ingest"\ntemplates = []\n\n[alerts]\n',
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("alive event accepted by 127.0.0.1", result.stdout)
+                alive = [r for r in receiver.requests if kind_of(r, "alive")]
+                self.assertEqual(len(alive), 1, receiver.requests)
+                payload = decode(alive[0][2], alive[0][1])
+                self.assertTrue(payload.get("machine_id"))
+                self.assertIn("uuid", payload)
+                self.assertGreater(payload.get("uptime", 0), 0)
+        finally:
+            receiver.close()
+
+    def test_verify_fails_when_ingest_rejects_alive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sock = socket.socket()
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+            sock.close()
+            result = self.verify(
+                tmp,
+                f'ingest_url = "http://127.0.0.1:{port}/ingest"\n\ntemplates = []\n\n[alerts]\n',
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("did not accept an alive event", result.stdout)
+            self.assertNotIn("Traceback", result.stderr)
 
     def test_heartbeat_alert_config_validates(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -405,6 +445,34 @@ class TestAlivePing(unittest.TestCase):
                     self.assertEqual(proc.wait(timeout=15), 0)
         finally:
             receiver.close()
+
+
+class TestNotify(unittest.TestCase):
+    def test_message_reaches_configured_webhook(self):
+        receiver = Receiver()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                write_config(tmp, f'webhook_url = "http://127.0.0.1:{receiver.port}/hook"\n')
+                result = run_microsre(["--notify", "hello, server xxx is working"], tmp)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Notification sent", result.stdout)
+                self.assertTrue(
+                    any(
+                        path.startswith("/hook") and b"hello, server xxx is working" in body
+                        for path, _, body in receiver.requests
+                    ),
+                    "message not received by the webhook",
+                )
+        finally:
+            receiver.close()
+
+    def test_notify_without_webhook_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_config(tmp, "")
+            result = run_microsre(["--notify", "hello"], tmp)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("webhook_url", result.stdout)
+            self.assertNotIn("Traceback", result.stderr)
 
 
 def run_heartbeat_snapshot(tmp, log_path, seconds, pattern="done", write=None, threshold=4):

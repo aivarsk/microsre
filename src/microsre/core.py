@@ -1,5 +1,4 @@
 import concurrent.futures
-import contextlib
 import functools
 import gzip
 import json
@@ -163,11 +162,15 @@ def _post_compressed_json(url, payload):
         {"Content-Type": "application/json", "Content-Encoding": "gzip"},
         repr(payload.get("kind")),
     )
-    if response:
-        with contextlib.suppress(json.JSONDecodeError, KeyError):
-            parsed = json.loads(response)
-            if parsed["status"] != "ok":
-                log.warning(f"Ingest of {payload.get('kind')!r} failed {parsed}")
+    if response is None:
+        return False
+    try:
+        accepted = json.loads(response)["status"] == "ok"
+    except (json.JSONDecodeError, KeyError):
+        accepted = True  # a 200 without a status body still means delivered
+    if not accepted:
+        log.warning(f"Ingest of {payload.get('kind')!r} rejected: {response!r}")
+    return accepted
 
 
 class BackgroundWorker:
@@ -259,11 +262,26 @@ class BackgroundWorker:
 worker = BackgroundWorker()
 
 
+def _ingest_payload(kind, data):
+    return {
+        "kind": kind,
+        "uuid": str(uuid.uuid4()),
+        "machine_id": machine_id(),
+        "version": APP_VERSION,
+        **data,
+    }
+
+
 def ingest(kind, data):
     url = config().get("ingest_url")
     if url:
-        data["kind"] = kind
-        data["uuid"] = str(uuid.uuid4())
-        data["machine_id"] = machine_id()
-        data["version"] = APP_VERSION
-        worker.submit(lambda: _post_compressed_json(url, data))
+        payload = _ingest_payload(kind, data)
+        worker.submit(lambda: _post_compressed_json(url, payload))
+
+
+def post_ingest(kind, data):
+    # Synchronous counterpart of ingest: the caller needs the delivery result.
+    url = config().get("ingest_url")
+    if not url:
+        return False
+    return _post_compressed_json(url, _ingest_payload(kind, data))
