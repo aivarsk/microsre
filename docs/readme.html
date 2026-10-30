@@ -192,12 +192,13 @@ systemctl --user start microsre</code></pre>
 
 <h2 id="cli">Command line</h2>
 
-<pre><code>microsre [--snapshot [SECONDS]] [--daemon] [--verify] [--version]</code></pre>
+<pre><code>microsre [--snapshot [SECONDS]] [--daemon] [--verify] [--notify MESSAGE] [--version]</code></pre>
 
 <ul>
   <li><code>--snapshot [SECONDS]</code> - run in the foreground, print the metrics dashboard every N seconds (default 60). Alerts are evaluated and displayed, but nothing is sent.</li>
   <li><code>--daemon</code> - run the monitoring loop: check every <code>interval</code> seconds (default 60), send alerts, and report to the hosted view when <code>ingest_url</code> is set.</li>
-  <li><code>--verify</code> - validate the configuration file: TOML syntax, webhook URL, alert rules, log sources, and template placeholders.</li>
+  <li><code>--verify</code> - validate the configuration file: TOML syntax, webhook URL, alert rules, log sources, and template placeholders. When <code>ingest_url</code> is set, also sends a live "alive" event and fails if the hosted view does not accept it.</li>
+  <li><code>--notify MESSAGE</code> - send a one-off message through the configured webhook and exit. The smoke test for your alert channel: if the hello does not arrive, alerts will not either.</li>
   <li><code>--version</code> - show the version and the locations of the config file, log file, state file, and machine ID file.</li>
 </ul>
 
