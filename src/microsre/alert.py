@@ -168,9 +168,9 @@ def configured_alerts(fail=False, dryrun=False):
     alerts = []
     c = config()
 
-    templates = {t["name"]: t for t in c["templates"]}
+    templates = {t["name"]: t for t in c.get("templates", [])}
 
-    for name, params in c["alerts"].items():
+    for name, params in c.get("alerts", {}).items():
         try:
             unknown = set(params) - {"min", "max", "duration", "recovery_margin", "template"}
             if unknown:

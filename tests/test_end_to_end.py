@@ -475,6 +475,64 @@ class TestNotify(unittest.TestCase):
             self.assertNotIn("Traceback", result.stderr)
 
 
+class TestMinimalConfig(unittest.TestCase):
+    def test_verify_accepts_config_without_optional_sections(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_config(tmp, "")
+            result = run_microsre(["--verify"], tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Configuration file valid", result.stdout)
+
+    def test_daemon_runs_with_ingest_url_only(self):
+        receiver = Receiver()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                # The minimal SaaS-only config: no alerts, templates, or logs sections.
+                write_config(tmp, f'ingest_url = "http://127.0.0.1:{receiver.port}/ingest"\ninterval = 5\n')
+                proc = start_microsre(tmp, ["--daemon"], stdout=subprocess.DEVNULL)
+                try:
+                    self.assertTrue(
+                        receiver.wait_for(lambda rs: any(kind_of(r, "tick") for r in rs), 30),
+                        "no 'tick' event received",
+                    )
+                    payloads = [decode(body, headers) for _, headers, body in receiver.requests]
+                    self.assertTrue(any(p.get("alerts") == [] for p in payloads), payloads)
+                    self.assertFalse([p for p in payloads if p.get("kind") == "exc"], payloads)
+                finally:
+                    proc.send_signal(signal.SIGTERM)
+                    self.assertEqual(proc.wait(timeout=15), 0)
+        finally:
+            receiver.close()
+
+
+class TestCadenceAdaptation(unittest.TestCase):
+    def test_agent_follows_saas_reported_interval(self):
+        # Server says 5s, config says 15s: ticks speed up anyway, and the log says why.
+        receiver = Receiver(headers={"x-microsre-interval": "5"})
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                write_config(
+                    tmp,
+                    f'ingest_url = "http://127.0.0.1:{receiver.port}/ingest"\ninterval = 15\n\n'
+                    "templates = []\n\n[alerts]\n",
+                )
+                proc = start_microsre(tmp, ["--daemon"], stdout=subprocess.DEVNULL)
+                try:
+                    # At a 15s cadence the third tick lands past 45s; adapted to 5s it is well under 32s.
+                    self.assertTrue(
+                        receiver.wait_for(lambda rs: sum(1 for r in rs if kind_of(r, "tick")) >= 3, 32),
+                        "ticks did not arrive at the SaaS-reported cadence",
+                    )
+                    log_text = (Path(tmp) / "state" / "microsre" / "microsre.log").read_text()
+                    self.assertIn("not 15s", log_text)
+                    self.assertIn("set interval = 5 in the config file", log_text)
+                finally:
+                    proc.send_signal(signal.SIGTERM)
+                    self.assertEqual(proc.wait(timeout=15), 0)
+        finally:
+            receiver.close()
+
+
 def run_heartbeat_snapshot(tmp, log_path, seconds, pattern="done", write=None, threshold=4):
     """Run --snapshot once over a single heartbeat-watched log; return Alerting lines.
 

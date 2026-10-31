@@ -18,7 +18,7 @@ def isolate_xdg():
 class Receiver:
     """A real HTTP server that records every request it gets."""
 
-    def __init__(self):
+    def __init__(self, headers=None):
         self.requests = []
         self._lock = threading.Lock()
         receiver = self
@@ -30,6 +30,8 @@ class Receiver:
                     receiver.requests.append((self.path, dict(self.headers), self.rfile.read(length)))
                 payload = b'{"status": "ok"}' if self.path.startswith("/ingest") else b""
                 self.send_response(200)
+                for name, value in (headers or {}).items():
+                    self.send_header(name, value)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()

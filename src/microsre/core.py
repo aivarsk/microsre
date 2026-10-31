@@ -130,6 +130,23 @@ def banner():
 log = _setup_logger()
 
 
+_reported_interval = None
+
+
+def reported_interval():
+    """Cadence the SaaS advertises for this plan, once an ingest response carried it."""
+    return _reported_interval
+
+
+def _learn_cadence(headers):
+    global _reported_interval
+    if value := headers.get("x-microsre-interval"):
+        try:
+            _reported_interval = int(float(value))
+        except ValueError:
+            pass
+
+
 def _post(url, data, headers, what):
     req = Request(
         url,
@@ -140,6 +157,7 @@ def _post(url, data, headers, what):
     for _ in range(3):
         try:
             with urlopen(req, timeout=5) as r:
+                _learn_cadence(r.headers)
                 return r.read()
         except urllib.error.HTTPError as exc:
             log.warning(f"Failed to post {what} to {url!r}", exc_info=True)
