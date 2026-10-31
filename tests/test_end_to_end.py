@@ -1,6 +1,7 @@
 import gzip
 import json
 import os
+import re
 import select
 import signal
 import socket
@@ -366,6 +367,47 @@ class TestDaemon(unittest.TestCase):
                     if proc.poll() is None:
                         proc.kill()
                         proc.wait()
+        finally:
+            receiver.close()
+
+    def test_tick_omits_blacklisted_metrics(self):
+        receiver = Receiver()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                write_config(
+                    tmp,
+                    f'ingest_url = "http://127.0.0.1:{receiver.port}/ingest"\n'
+                    f"interval = 5\n\n"
+                    '[alerts]\n"cpu.loadavg.1min.previous" = { min = 99999999, duration = 0, template = "metric" }\n\n'
+                    "[[templates]]\n"
+                    'name = "metric"\n'
+                    'title = "{metric.name} alert on {hostname}"\n'
+                    'body = "value {metric.value}"\n',
+                )
+
+                def tick_is_filtered(request):
+                    if not kind_of(request, "tick"):
+                        return False
+                    payload = decode(request[2], request[1])
+                    metrics = payload.get("metrics", {})
+                    return (
+                        "cpu.utilization_pct" in metrics
+                        and "cpu.max_utilization_pct" in metrics
+                        and not any(re.fullmatch(r"cpu\.cpu\d+\.utilization_pct", n) for n in metrics)
+                        and not any(n.endswith(".previous") for n in metrics)
+                        # the only configured alert targets a blacklisted metric
+                        and payload.get("alerts") == []
+                    )
+
+                proc = start_microsre(tmp, ["--daemon"], stdout=subprocess.DEVNULL)
+                try:
+                    self.assertTrue(
+                        receiver.wait_for(lambda rs: any(tick_is_filtered(r) for r in rs), 30),
+                        "no 'tick' with blacklisted metrics and alert settings filtered out",
+                    )
+                finally:
+                    proc.send_signal(signal.SIGTERM)
+                    self.assertEqual(proc.wait(timeout=15), 0)
         finally:
             receiver.close()
 

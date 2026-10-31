@@ -574,6 +574,8 @@ chat_id = "-1001234567890"</code></pre>
 
 <p>3. Restart the daemon. The machine appears in your fleet view within one check, reports a heartbeat every check, and sends "up" / "down" events on start and shutdown. If a machine stops checking in, the hosted view alerts - a dead man's switch, not a missing data point.</p>
 
+<p>The hosted view stores the summary metrics; per-core cpu (<code>cpu.cpuN.utilization_pct</code>) and the <code>*.previous</code> template helpers stay on the machine - local alerting, templates, and the prometheus endpoint keep them all. Alert settings for those never reach the hosted view either.</p>
+
 <hr>
 
 <h2 id="troubleshooting">Troubleshooting</h2>

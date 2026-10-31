@@ -3,7 +3,7 @@ import unittest
 
 from testutil import isolate_xdg
 
-from microsre.metrics import calculate_metrics
+from microsre.metrics import blacklisted, calculate_metrics, reportable_metrics
 
 
 def setUpModule():
@@ -491,6 +491,58 @@ class TestAlertable(unittest.TestCase):
         template = {"title": "microsre RSS {self.rss_bytes} on {hostname}", "body": ""}
         alert = AlertState("self.rss_bytes", None, 500_000_000, 0, 0, template)
         alert.validate(_known_metrics())
+
+
+class TestReportableMetrics(unittest.TestCase):
+    def test_blacklisted_names(self):
+        for name in (
+            "cpu.cpu0.utilization_pct",
+            "cpu.cpu12.utilization_pct",
+            "cpu.loadavg.1min.previous",
+            "cpu.pressure.some.avg10.previous",
+        ):
+            self.assertTrue(blacklisted(name), name)
+
+    def test_allowed_names(self):
+        for name in (
+            "cpu.utilization_pct",
+            "cpu.max_utilization_pct",
+            "cpu.max_utilization_core",
+            "cpu.loadavg.1min",
+            "cpu.pressure.some.avg10",
+            "mem.utilization_pct",
+            "disk.sda.utilization_pct",
+            "net.eth0.rx_bytes_per_sec",
+            "logs.app.error_count",
+            "burst.cpu.utilization_pct",
+        ):
+            self.assertFalse(blacklisted(name), name)
+
+    def test_reportable_subset_of_a_real_tick(self):
+        # per-core cpu and *.previous helpers exist locally (alerting,
+        # templates, prometheus) but never enter the ingest payload
+        base_stat = {
+            "cpu": dict.fromkeys(CPU_FIELDS, 0),
+            "cpu0": dict.fromkeys(CPU_FIELDS, 0),
+            "cpu1": dict.fromkeys(CPU_FIELDS, 0),
+            "procs_running": 0,
+            "procs_blocked": 0,
+            "ctxt": 0,
+        }
+        busy = {k: (dict.fromkeys(CPU_FIELDS, 400) if k.startswith("cpu") else v) for k, v in base_stat.items()}
+        metrics = calculate_metrics(snapshot(**{"proc.stat": base_stat}), snapshot(**{"proc.stat": busy}), INTERVAL)
+        self.assertIn("cpu.cpu0.utilization_pct", metrics)
+        self.assertIn("cpu.cpu1.utilization_pct", metrics)
+        self.assertIn("cpu.loadavg.1min.previous", metrics)
+
+        reported = reportable_metrics(metrics)
+        self.assertIn("cpu.utilization_pct", reported)
+        self.assertIn("cpu.max_utilization_pct", reported)
+        self.assertIn("cpu.max_utilization_core", reported)
+        self.assertIn("cpu.loadavg.1min", reported)
+        self.assertNotIn("cpu.cpu0.utilization_pct", reported)
+        self.assertNotIn("cpu.cpu1.utilization_pct", reported)
+        self.assertFalse(any(name.endswith(".previous") for name in reported))
 
 
 if __name__ == "__main__":

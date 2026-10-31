@@ -93,6 +93,22 @@ class TestRender(unittest.TestCase):
         # labeled families are not duplicated as flat names
         self.assertNotIn("microsre_cpu_cpu0_utilization_pct", text)
 
+    def test_blacklisted_metrics_still_render(self):
+        # the ingest-payload blacklist never touches prometheus: per-core
+        # and *.previous helpers stay visible on /metrics
+        metrics = {
+            "cpu.list": "cpu0,cpu1",
+            "cpu.cpu0.utilization_pct": 75,
+            "cpu.cpu1.utilization_pct": 25,
+            "cpu.loadavg.1min.previous": 0.5,
+            "mem.utilization_pct": 42,
+        }
+        text = prom.render(metrics)
+        self.assertIn('microsre_cpu_utilization_per_core{core="cpu0"} 75', text)
+        self.assertIn('microsre_cpu_utilization_per_core{core="cpu1"} 25', text)
+        self.assertIn("microsre_cpu_loadavg_1min_previous 0.5", text)
+        self.assertIn("microsre_mem_utilization_pct 42", text)
+
     def test_empty_lists_emit_no_labeled_lines(self):
         text = prom.render({"cpu.list": "", "disk.list": "", "net.list": ""})
         self.assertEqual(text, "\n")

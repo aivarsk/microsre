@@ -1,8 +1,24 @@
 import contextlib
 import os
+import re
 import time
 
 _PAGE_SIZE = os.sysconf("SC_PAGE_SIZE")
+
+# The SaaS never stores these, so the tick does not carry them: per-core cpu
+# (the cpu.max_* summary covers hot cores) and *.previous template helpers.
+# They stay local - prometheus and agent-side alerting keep them.
+TICK_METRIC_LIMIT = 512  # numeric metrics per tick; the SaaS ingest rejects over-limit ticks
+_BLACKLIST = re.compile(r"^cpu\.cpu\d+\.utilization_pct$|\.previous$")
+
+
+def blacklisted(name):
+    return bool(_BLACKLIST.search(name))
+
+
+def reportable_metrics(metrics):
+    """The metrics subset that goes into the ingest payload."""
+    return {name: value for name, value in metrics.items() if not blacklisted(name)}
 
 
 def _pct(value, total):

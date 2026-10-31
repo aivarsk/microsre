@@ -13,7 +13,7 @@ from microsre.alert import configured_alerts, send_configured_notification
 from microsre.burst import BurstSampler
 from microsre.core import banner, config, ingest, log, post_ingest, reported_interval, worker
 from microsre.logreader import collect_logs, file_offsets, init_logs
-from microsre.metrics import calculate_metrics
+from microsre.metrics import TICK_METRIC_LIMIT, blacklisted, calculate_metrics, reportable_metrics
 from microsre.procfs import collect_procfs, uptime_seconds
 from microsre.text import dashboard
 
@@ -61,7 +61,16 @@ def on_tick_report(metrics, raw):
     # Evaluate first, so the tick carries this interval's alerting state.
     for alert in configured_alerts():
         alert.evaluate(metrics, time.monotonic())
-    ingest("tick", {"metrics": metrics, "alerts": _alert_settings()})
+    reported = reportable_metrics(metrics)
+    if len(reported) > TICK_METRIC_LIMIT:
+        log.warning(
+            f"tick carries {len(reported)} metrics, reporting the first {TICK_METRIC_LIMIT} "
+            "alphabetically to stay under the SaaS ingest limit"
+        )
+        reported = dict(sorted(reported.items())[:TICK_METRIC_LIMIT])
+    # Blacklisted metrics never reach the SaaS, alert settings for them neither.
+    alerts = [a for a in _alert_settings() if not blacklisted(a["metric"])]
+    ingest("tick", {"metrics": reported, "alerts": alerts})
     prom.publish(metrics)
 
 
