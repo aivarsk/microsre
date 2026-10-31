@@ -228,7 +228,7 @@ systemctl --user start microsre</code></pre>
 <h3>Full example</h3>
 
 <pre><code># Report to the microsre.io hosted view (optional)
-# ingest_url = "https://eu.microsre.io/ingest?token=&lt;your token&gt;"
+# ingest_url = "https://app.microsre.io/ingest/msre_..."
 
 # Expose metrics for Prometheus scraping (optional)
 # prometheus_listen = "127.0.0.1:9100"
@@ -566,11 +566,11 @@ chat_id = "-1001234567890"</code></pre>
 
 <h3>Connecting a machine</h3>
 
-<p>1. Sign up at <a href="/#saas">microsre.io</a> to get an ingest URL with a token.</p>
+<p>1. Sign up at <a href="https://app.microsre.io/">app.microsre.io</a> to get an ingest URL with a token.</p>
 
 <p>2. Add one line to the top of your config:</p>
 
-<pre><code>ingest_url = "https://eu.microsre.io/ingest?token=&lt;your token&gt;"</code></pre>
+<pre><code>ingest_url = "https://app.microsre.io/ingest/msre_..."</code></pre>
 
 <p>3. Restart the daemon. The machine appears in your fleet view within one check, reports a heartbeat every check, and sends "up" / "down" events on start and shutdown. If a machine stops checking in, the hosted view alerts - a dead man's switch, not a missing data point.</p>
 
