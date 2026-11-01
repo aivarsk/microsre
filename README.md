@@ -1,6 +1,6 @@
 # microSRE
 
-Know when your server needs you. Linux health checks at your cadence - no Prometheus, Grafana, or metrics agent.
+Know when your server needs you. Local-first Linux health checks at your cadence - no Prometheus, Grafana, or metrics agent.
 
 Built for people who fix problems, not dashboards.
 
@@ -30,7 +30,7 @@ Your logs already contain the errors; microSRE alerts on patterns and thresholds
 
 ## Fleet beta
 
-The optional hosted view aggregates health checks across machines. Raw metrics and logs stay local; the hosted view receives only periodic health summaries and alert state.
+microSRE is local-first: every feature works on the machine itself, no server required. The optional hosted view aggregates health checks across machines. Raw metrics and logs stay local; the hosted view receives only periodic health summaries and alert state.
 
 Join the private beta: https://microsre.io/#saas
 
