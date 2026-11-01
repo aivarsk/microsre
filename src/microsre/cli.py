@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from microsre import prom, state
 from microsre.alert import configured_alerts, send_configured_notification
 from microsre.burst import BurstSampler
-from microsre.core import banner, config, ingest, log, post_ingest, reported_interval, worker
+from microsre.core import banner, config, ingest, log, post_ingest, reported_alive_interval, reported_interval, worker
 from microsre.logreader import collect_logs, file_offsets, init_logs
 from microsre.metrics import TICK_METRIC_LIMIT, blacklisted, calculate_metrics, reportable_metrics
 from microsre.procfs import collect_procfs, uptime_seconds
@@ -100,15 +100,22 @@ def _saas_cadence_note(interval):
     return None
 
 
-def _adopt_reported_interval(interval):
-    # The SaaS advertises the plan cadence on ingest responses (the up event answers first).
-    if (reported := reported_interval()) and reported != interval:
+def _adopt_reported_cadence(interval, alive_every):
+    # SaaS-reported values are floors: never tick or ping faster than the plan
+    # accepts, but a slower local setting wins without a warning.
+    if (reported := reported_interval()) and reported > interval:
         log.warning(
             f"SaaS plan accepts one tick per {reported}s, not {interval}s: "
             f"ticking every {reported}s now; set interval = {reported} in the config file"
         )
-        return reported
-    return interval
+        interval = reported
+    if (reported := reported_alive_interval()) and reported > alive_every:
+        log.warning(
+            f"SaaS asks for one alive ping per {reported}s, not {alive_every}s: "
+            f"pinging every {reported}s now; set alive_interval = {reported} in the config file"
+        )
+        alive_every = reported
+    return interval, alive_every
 
 
 def run_monitoring_loop(interval, daemon, on_tick):
@@ -151,7 +158,7 @@ def run_monitoring_loop(interval, daemon, on_tick):
         previous = {}
         previous.update(collect_procfs(timestamp))
         last = time.monotonic()
-        interval = _adopt_reported_interval(interval)
+        interval, alive_every = _adopt_reported_cadence(interval, alive_every)
 
         while not stop.wait(max(interval - (time.monotonic() - timer), 0)):
             try:
@@ -168,7 +175,7 @@ def run_monitoring_loop(interval, daemon, on_tick):
                 metrics = calculate_metrics(previous, current, max(now - last, 1))
                 metrics.update(sampler.drain())
                 on_tick(metrics, current)
-                interval = _adopt_reported_interval(interval)
+                interval, alive_every = _adopt_reported_cadence(interval, alive_every)
                 previous = current
                 last = now
             except Exception:

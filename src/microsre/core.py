@@ -131,6 +131,7 @@ log = _setup_logger()
 
 
 _reported_interval = None
+_reported_alive_interval = None
 
 
 def reported_interval():
@@ -138,11 +139,22 @@ def reported_interval():
     return _reported_interval
 
 
+def reported_alive_interval():
+    """Alive-ping floor the SaaS advertises, once an ingest response carried it."""
+    return _reported_alive_interval
+
+
 def _learn_cadence(headers):
-    global _reported_interval
+    # The SaaS answers ingest with the cadence and alive-ping floor the plan accepts.
+    global _reported_interval, _reported_alive_interval
     if value := headers.get("x-microsre-interval"):
         try:
             _reported_interval = int(float(value))
+        except ValueError:
+            pass
+    if value := headers.get("x-microsre-alive-interval"):
+        try:
+            _reported_alive_interval = int(float(value))
         except ValueError:
             pass
 
