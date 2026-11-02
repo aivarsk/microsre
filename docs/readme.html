@@ -564,15 +564,23 @@ chat_id = "-1001234567890"</code></pre>
 
 <p>This is your command and control center with health checks from all your machines in one place</p>
 
-<h3>Connecting a machine</h3>
+<h3>Connecting a machine - a 60-second setup (60,000 ms)</h3>
 
-<p>1. Sign up at <a href="https://app.microsre.io/">app.microsre.io</a> to get an ingest URL with a token.</p>
+<p>1. Sign up at <a href="https://app.microsre.io/">app.microsre.io</a> and copy your ingest URL.</p>
 
-<p>2. Add one line to the top of your config:</p>
+<p>2. Make it the only line in your config:</p>
 
 <pre><code>ingest_url = "https://app.microsre.io/ingest/msre_..."</code></pre>
 
-<p>3. Restart the daemon. The machine appears in your fleet view within one check, reports a heartbeat every check, and sends "up" / "down" events on start and shutdown. If a machine stops checking in, the hosted view alerts - a dead man's switch, not a missing data point.</p>
+<p>3. Restart the daemon. The machine appears in your fleet view within one check. That is the whole setup - from here you get:</p>
+
+<ul>
+  <li>the dead man's switch: a machine that stops checking in alerts you, because silence can only be observed from outside</li>
+  <li>every metric charted per machine, with alert rules you set in the app and notifications to your chat</li>
+  <li>"up" / "down" events on start and shutdown, and an "alive" heartbeat every few seconds in between</li>
+</ul>
+
+<p>To make a machine more independent of us, add a <code>webhook_url</code> and a few <code>[alerts]</code> rules to the config (<a href="#quickstart">the local quickstart</a>) - pages then arrive even when the hosted view is unreachable, and the agent keeps working without it entirely.</p>
 
 <p>The hosted view stores the summary metrics; per-core cpu (<code>cpu.cpuN.utilization_pct</code>) and the <code>*.previous</code> template helpers stay on the machine - local alerting, templates, and the prometheus endpoint keep them all. Alert settings for those never reach the hosted view either.</p>
 
